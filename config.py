@@ -8,7 +8,7 @@ SDSC = {'name' : 'SDSC',
         'pa_claimform' : 21}
 
 OHSA = {'name' : 'OHSA',
-        'planum'       : 7,
+        'plannum'       : 7,
         'claimform'    : 33,
         'pa_claimform' : 35}
 
@@ -133,3 +133,40 @@ teeth = {'1': '18', '10': '22', '11': '23', '12': '24', '13': '25', '14': '26', 
         '23': '32', '24': '31', '25': '41', '26': '42', '27': '43', '28': '44', '29': '45', '3': '16', '30': '46', '31': '47', '32': '48', '4': '15', '5': '14', '6': '13', '7': '12', '8': '11',
         '9': '21', 'A': '55', 'B': '54', 'C': '53', 'D': '52', 'E': '51', 'F': '61', 'G': '62', 'H': '63', 'I': '64', 'J': '65', 'K': '75', 'L': '74', 'M': '73', 'N': '72', 'O': '71', 'P': '81',
         'Q': '82', 'R': '83', 'S': '84', 'T': '85'}
+
+create_view_claims_waiting = '''
+CREATE VIEW _claims_waiting AS
+SELECT
+    c.claimnum AS claimnum,
+    p.patnum AS patnum,
+    p.fname AS first_name,
+    p.lname AS last_name,
+    p.birthdate AS birthdate,
+    p.ssn AS NHI,
+    p.gender AS gender,
+    p.address AS address,
+    p.city AS city,
+    p.schoolname AS school,
+    ins.subscriberid,
+    c.priorauthorizationnumber AS prior_approval
+FROM claim c
+INNER JOIN patient p ON c.patnum = p.patnum
+INNER JOIN inssub ins ON c.inssubnum = ins.inssubnum
+WHERE c.claimstatus = 'W'
+'''
+
+create_view_get_procedures = '''
+CREATE VIEW _get_procedures AS
+SELECT
+    pl.procnum AS procnum,
+    cp.codesent as code,
+    pl.ProcDate as proc_date,
+    sum(pl.ProcFee) as fee,
+    count(*) as quantity,
+    GROUP_CONCAT(pl.ToothNum) as teeth
+FROM procedurelog pl
+INNER JOIN claimproc cp on pl.procnum = cp.procnum
+INNER JOIN claim c on cp.claimnum = c.claimnum
+WHERE c.claimstatus = 'W'
+GROUP BY c.claimnum, pl.procdate, cp.codesent, pl.procfee
+'''
