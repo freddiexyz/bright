@@ -17,85 +17,47 @@ class Database(records.Database):
 
 
 class Claim():
-
-    db = None # Needs to be set by user
-
-    def __init__(self, claimnum, patient, procedures, prior_approval=None):
-        self.claimnum       = claimnum
+    def __init__(self, patient, procedures):
         self.patient        = patient
         self.procedures     = procedures
-        self.prior_approval = prior_approval
-
         self.fee = sum(proc['fee'] for proc in self.procedures)
 
+    def __len__(self):
+        return len(self.procedures)
+
+    def __str__(self):
+        return f"{self.patient['last_name']}, {self.patient['first_name']}: {len(self)} procedures to send"
+
     @classmethod
-    def from_claimnums(cls, claimnums, is_pa=False):
-        if not Claim.db:
-            raise Exception('No database connection')
+    def from_waiting(cls, db, carrier):
+        patients = db.query('''
+            SELECT cw.*
+            FROM _claims_waiting cw
+            INNER JOIN claim c ON cw.claimnum = c.claimnum
+            WHERE c.plannum = {plannum}
+            AND c.claimform in ({claimform}, {pa_claimform})
+            '''.format(**carrier))
+        procedures = db.query('''
+            SELECT c.claimnum, gp.*
+            FROM _get_procedures gp
+            INNER JOIN claimproc cp on gp.procnum = cp.procnum
+            INNER JOIN claim c on cp.claimnum = c.claimnum
+            WHERE c.plannum = {plannum}
+            AND c.claimform in ({claimform}, {pa_claimform})
+            '''.format(**carrier))
+        for patient in patients:
+            yield cls(patient, tuple(procs for procs in procedures if procs['claimnum'] == patient['claimnum']))
 
-        for claimnum in claimnums:
-            patient = Claim.db.query('''
-                SELECT p.patnum         as patnum,
-                       p.fname          as first_name,
-                       p.lname          as last_name,
-                       p.birthdate      as birthdate,
-                       p.ssn            as NHI,
-                       p.gender         as gender,
-                       p.address        as address,
-                       p.city           as city,
-                       p.schoolname     as school,
-                       ins.subscriberid as sub_id
-                FROM claim c
-                INNER JOIN patient p ON c.patnum = p.patnum
-                INNER JOIN inssub ins ON c.inssubnum = ins.inssubnum
-                WHERE c.claimnum = {claimnum}
-                '''.format(claimnum=claimnum))
-
-            procedures = Claim.db.query('''
-                SELECT count(*)        as quantity,
-                       pl.procdate     as procedure_date,
-                       pl.procfee      as fee_ea,
-                       sum(pl.procfee) as fee,
-                       cp.codesent     as procedure_code,
-                       GROUP_CONCAT(pl.toothnum) as teeth
-                FROM procedurelog pl
-                INNER JOIN claimproc cp on cp.procnum = pl.procnum
-                WHERE cp.claimnum = {claimnum}
-                GROUP BY procedure_date, procedure_code, fee_ea
-                '''.format(claimnum=claimnum))
-
-            if is_pa:
-                prior_approval = Claim.db.query('''
-                    SELECT PriorAuthorizationNumber
-                    FROM claim
-                    WHERE claimnum = {claimnum}
-                    '''.format(claimnum=claimnum))
-                yield cls(claimnum, patient, procedures, prior_approval)
-
-            yield cls(claimnum, patient, procedures)
-
-
-
-
+        
 class Summary():
     def __init__(self, claims):
-        self.claims = tuple(claims)[:config.MAX_CLAIMS]
+        self.claims = tuple(claims)
         self.total = sum(claim.fee for claim in self.claims)
         self.GST = self.total * config.GST
-        self.total_inc_GST = self.total * (1 + config.GST)
+        self.total_inc_GST = self.total + self.GST
 
 
 if __name__ == '__main__':
     with Database() as db:
-        Claim.db = db
-        res = db.query("""
-            SELECT claimnum
-            FROM claim
-            WHERE PlanNum = {plannum} and ClaimStatus = 'W' and claimform = {claimform}""".format(**SDSC))
-        claims = Claim.from_claimnums(line['claimnum'] for line in res)
-        s = Summary(claims)
-    print(f'Patients: {len(s.claims)}',
-          f'Total ext GST: {s.total}',
-          f'GST: {s.GST}',
-          f'Total inc GST: {s.total_inc_GST}',
-          sep='\n')
+        for claim in (Claim.from_waiting(db, SDSC)):
+            print(claim)
