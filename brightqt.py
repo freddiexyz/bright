@@ -26,19 +26,21 @@ class Claim():
         return len(self.procedures)
 
     def __str__(self):
-        return f"{self.patient['last_name']}, {self.patient['first_name']}: {len(self)} procedures to send"
+        return f"{self.patient['last_name']}, {self.patient['first_name']}\n\t" +\
+            "\n\t".join("{code} | {quantity} | {fee}".format(**proc) for proc in self.procedures)
 
     @classmethod
     def from_waiting(cls, db, carrier):
         patients = db.query('''
-            SELECT cw.*
+            SELECT cw.* # claimnum, patnum, first_name, last_name, birthdate, nhi,
+                        # gender, address, city, school, subscriberid, prior_approval
             FROM _claims_waiting cw
             INNER JOIN claim c ON cw.claimnum = c.claimnum
             WHERE c.plannum = {plannum}
             AND c.claimform in ({claimform}, {pa_claimform})
             '''.format(**carrier))
         procedures = db.query('''
-            SELECT c.claimnum, gp.*
+            SELECT c.claimnum, gp.* # procnum, code, proc_date, fee, quantity, teeth
             FROM _get_procedures gp
             INNER JOIN claimproc cp on gp.procnum = cp.procnum
             INNER JOIN claim c on cp.claimnum = c.claimnum
