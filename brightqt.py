@@ -48,6 +48,7 @@ class Claim():
             AND c.claimform in ({claimform}, {pa_claimform})
             '''.format(**carrier))
         for patient in patients:
+            # merge sort dual indicies merge
             yield cls(patient, tuple(procs for procs in procedures if procs['claimnum'] == patient['claimnum']))
 
         
