@@ -51,21 +51,18 @@ class Claim():
             '''.format(**carrier))
         patients = patients.all(as_dict=True)
         procedures = procedures.all(as_dict=True)
-        
-        # merge sort dual indicies merge
-        patient_index = 0
-        patient_procs = []
-        for procedure in procedures:
-            if procedure['claimnum'] == patients[patient_index]['claimnum']:
-                patient_procs.append(procedure)
-            else:
-                yield cls(patients[patient_index], patient_procs)
-                patient_procs = [procedure]
-                patient_index += 1
 
-        # old bad way
-        # for patient in patients:
-        #     yield cls(patient, tuple(procs for procs in procedures if procs['claimnum'] == patient['claimnum']))
+        proc_index = 0
+        for patient in patients:
+            patient_procs = [procedures[proc_index]]
+            proc_index += 1
+            try:
+                while procedures[proc_index]['claimnum'] == patient['claimnum']:
+                    patient_procs.append(procedures[proc_index])
+                    proc_index += 1
+            except IndexError: # exhausted all procedures
+                pass
+            yield cls(patient, patient_procs)
 
         
 class Summary():
