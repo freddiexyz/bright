@@ -38,6 +38,7 @@ class Claim():
             INNER JOIN claim c ON cw.claimnum = c.claimnum
             WHERE c.plannum = {plannum}
             AND c.claimform in ({claimform}, {pa_claimform})
+            ORDER BY claimnum;
             '''.format(**carrier))
         procedures = db.query('''
             SELECT c.claimnum, gp.* # procnum, code, proc_date, fee, quantity, teeth
@@ -46,10 +47,25 @@ class Claim():
             INNER JOIN claim c on cp.claimnum = c.claimnum
             WHERE c.plannum = {plannum}
             AND c.claimform in ({claimform}, {pa_claimform})
+            ORDER BY c.claimnum;
             '''.format(**carrier))
-        for patient in patients:
-            # merge sort dual indicies merge
-            yield cls(patient, tuple(procs for procs in procedures if procs['claimnum'] == patient['claimnum']))
+        patients = patients.all(as_dict=True)
+        procedures = procedures.all(as_dict=True)
+        
+        # merge sort dual indicies merge
+        patient_index = 0
+        patient_procs = []
+        for procedure in procedures:
+            if procedure['claimnum'] == patients[patient_index]['claimnum']:
+                patient_procs.append(procedure)
+            else:
+                yield cls(patients[patient_index], patient_procs)
+                patient_procs = [procedure]
+                patient_index += 1
+
+        # old bad way
+        # for patient in patients:
+        #     yield cls(patient, tuple(procs for procs in procedures if procs['claimnum'] == patient['claimnum']))
 
         
 class Summary():
