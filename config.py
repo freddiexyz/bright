@@ -135,9 +135,12 @@ teeth = {'1': '18', '10': '22', '11': '23', '12': '24', '13': '25', '14': '26', 
         'Q': '82', 'R': '83', 'S': '84', 'T': '85'}
 
 create_view_claims_waiting = '''
+DROP VIEW _claims_waiting;''' +\
+'''
 CREATE VIEW _claims_waiting AS
 SELECT
     c.claimnum AS claimnum,
+    c.claimform AS claimform
     p.patnum AS patnum,
     p.fname AS first_name,
     p.lname AS last_name,
@@ -147,15 +150,17 @@ SELECT
     p.address AS address,
     p.city AS city,
     p.schoolname AS school,
-    ins.subscriberid,
+    ins.subscriberid AS subnum,
     c.priorauthorizationnumber AS prior_approval
 FROM claim c
 INNER JOIN patient p ON c.patnum = p.patnum
 INNER JOIN inssub ins ON c.inssubnum = ins.inssubnum
-WHERE c.claimstatus = 'W'
+WHERE c.claimstatus = 'W';
 '''
 
 create_view_get_procedures = '''
+DROP VIEW _get_procedures;''' +\
+'''
 CREATE VIEW _get_procedures AS
 SELECT
     pl.procnum AS procnum,
@@ -170,3 +175,23 @@ INNER JOIN claim c on cp.claimnum = c.claimnum
 WHERE c.claimstatus = 'W'
 GROUP BY c.claimnum, pl.procdate, cp.codesent, pl.procfee
 '''
+
+SELECT_PATIENTS = '''
+            SELECT cw.* # claimnum, patnum, first_name, last_name, birthdate, nhi,
+                        # gender, address, city, school, subscriberid, prior_approval
+            FROM _claims_waiting cw
+            INNER JOIN claim c ON cw.claimnum = c.claimnum
+            WHERE c.plannum = {plannum}
+            AND c.claimform in ({claimform}, {pa_claimform})
+            ORDER BY claimnum;
+            '''
+
+SELECT_PROCEDURES = '''
+            SELECT c.claimnum, gp.* # procnum, code, proc_date, fee, quantity, teeth
+            FROM _get_procedures gp
+            INNER JOIN claimproc cp on gp.procnum = cp.procnum
+            INNER JOIN claim c on cp.claimnum = c.claimnum
+            WHERE c.plannum = {plannum}
+            AND c.claimform in ({claimform}, {pa_claimform})
+            ORDER BY c.claimnum;
+            '''
