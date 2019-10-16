@@ -19,9 +19,12 @@ class Claim():
         self.patient = patient
         self.procedures = procedures
         self.carrier = carrier
-        self.fee = 0
         self.missing_info = []
 
+        if self.carrier['name'] == 'OHSA':
+            self.patient['decile'] = get_decile(self.patient['school'])
+
+        self.fee = 0
         for proc in self.procedures:
             self.fee += proc['fee']
             proc['date'] = proc['proc_date'].strftime("%d.%m.%y")
@@ -62,8 +65,13 @@ class Claim():
             self.missing_info.append('prior_approval')
         if not check_nhi(self.patient['NHI']):
             self.missing_info.append('NHI')
-        if not check_cds_ref(self.patient['subnum']):
+        if self.carrier['name'] == 'SDSC' and not check_cds_ref(self.patient['subnum']):
             self.missing_info.append('subnum')
+        for field in ('first_name', 'last_name', 'birthdate', 'address', 'city', 'school'):
+            if not self.patient[field]:
+                self.missing_info.append(field)
+        if self.carrier['name'] == 'OHSA' and not self.patient['decile']:
+            self.missing_info.append('decile')
         return not self.missing_info
 
         
@@ -74,18 +82,22 @@ class Summary():
         self.GST = self.total * config.GST
         self.total_inc_GST = self.total + self.GST
 
+    def __len__(self):
+        return len(self.claims)
+
     def __str__(self):
-        return f'Number of Patients: {len(self.claims)}' +\
+        return f'Number of Patients: {len(self)}' +\
             f'\nTotal: {self.total:>8.2f}' +\
             f'\nGST: {self.GST:>8.2f}' +\
             f'\nTotal inc GST: {self.total_inc_GST:>8.2f}'
 
 def check_nhi(nhi):
     '''Uses the check digit to verify that NHI is valid'''
-    alpha = 'ABCDEFGHJKLMNPQRSTUVWXYZ' #does not contain 'I' and 'O'
+    alpha = 'ABCDEFGHJKLMNPQRSTUVWXYZ' # does not contain 'I' or 'O'
     nhi = str(nhi).upper().strip()
-    if not re.fullmatch('^[A-H|J-N|P-Z]{3}[\d]{4}$', nhi):
+    if not re.fullmatch(f'^[{alpha}]{{3}}[\d]{{4}}$', nhi): # matches pattern AAANNNN
         return False
+    # Parity check maths
     sum_letters = sum((str.find(alpha, str(nhi[i])) + 1) * (7-i) for i in range(3))
     sum_numbers = sum(int(nhi[i]) * (7-i) for i in range(3,6))
     total = sum_letters + sum_numbers
@@ -95,7 +107,8 @@ def check_nhi(nhi):
     return True
 
 def check_cds_ref(ref_num):
-    '''######-[SED/SBD] or SED-049-#### or SED17[NHI]'''
+    '''Matches referral number to known patterns
+    ######-[SED/SBD] or SED-049-#### or SED17[NHI]'''
     ref_num = ref_num.strip().upper()
     if ref_num == '.':
         return True
@@ -103,14 +116,21 @@ def check_cds_ref(ref_num):
         return True
     if re.fullmatch('^SED-\d{3}-\d{4}$', ref_num):
         return True
-    if re.fullmatch('^(SED|SDB)\d{2}[-|\s]?[A-H|J-N|P-Z]{3}\d{4}$', ref_num):
+    if re.fullmatch('^(SED|SDB)\d{2}[-|\s]?[A-Z]{3}\d{4}$', ref_num):
         return True
     return False
+
+def get_decile(pat_school):
+    '''Attempts to match a given school to know schools'''
+    for school in config.schools:
+        if any(re.fullmatch(f"^{pattern}.*$", pat_school.upper().strip()) for pattern in school):
+            return config.schools[school] # decile
+    return 0
 
 
 if __name__ == '__main__':
     with Database() as db:
-        print(Summary(Claim.gen_from_waiting(db, config.SDSC)))
-
-        # for claim in (Claim.gen_from_waiting(db, config.SDSC)):
-        #     print(claim.validate())
+        # s = Summary(claim for claim in Claim.gen_from_waiting(db, config.SDSC) if claim.validate())
+        # print(s)
+        for claim in (Claim.gen_from_waiting(db, config.OHSA)):
+            print('Ready' if claim.validate() else claim.missing_info)

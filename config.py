@@ -12,7 +12,7 @@ OHSA = {'name' : 'OHSA',
         'claimform'    : 33,
         'pa_claimform' : 35}
 
-deciles = {
+schools = {
 #CDC
 (".*CDC", ".*CLINIC", ".*CDS", ".*CC$", "REFER FROM SELF") : 0,
 #Aidanfield Christian School
