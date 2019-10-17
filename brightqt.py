@@ -1,4 +1,5 @@
-# import reportlab.pdfgen
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
 # import openpyxl
 import argparse
 import _secret
@@ -22,6 +23,7 @@ class Claim():
         self.missing_info = []
 
         if self.carrier['name'] == 'OHSA':
+            #TODO: deal with capitated procedures
             self.patient['decile'] = get_decile(self.patient['school'])
 
         self.fee = 0
@@ -61,18 +63,37 @@ class Claim():
             yield cls(patient, patient_procs, carrier)
 
     def validate(self):
+        # prior approval claims need prior approval numbers
         if self.patient['claimform'] == self.carrier['pa_claimform'] and not self.patient['prior_approval']:
             self.missing_info.append('prior_approval')
+        # all claims need valid NHIs
         if not check_nhi(self.patient['NHI']):
             self.missing_info.append('NHI')
+        # SDSC claims need referral numbers
         if self.carrier['name'] == 'SDSC' and not check_cds_ref(self.patient['subnum']):
             self.missing_info.append('subnum')
+        # check for presence of required fields
         for field in ('first_name', 'last_name', 'birthdate', 'address', 'city', 'school'):
             if not self.patient[field]:
                 self.missing_info.append(field)
+        # OHSA claims need deciles
         if self.carrier['name'] == 'OHSA' and not self.patient['decile']:
             self.missing_info.append('decile')
+            # TODO: match decile to DBCON code/fee to ensure correct decile band being claimed
         return not self.missing_info
+
+    def to_form(self, canvas):
+        form_length = self.carrier['form_length_pa'] if self.patient['claimform'] ==\
+         self.carrier['pa_claimform'] else self.carrier['form_length']
+        for page in range(((len(self) - 1) // form_length) + 1):
+            self.to_page(canvas)
+
+    def to_page(self, canvas):
+        width, height = A4
+        canvas.setFont('Courier', 55)
+        canvas.drawImage(self.carrier['form_img'], width=width, height=height)
+        canvas.showPage()
+
 
         
 class Summary():
@@ -90,6 +111,14 @@ class Summary():
             f'\nTotal: {self.total:>8.2f}' +\
             f'\nGST: {self.GST:>8.2f}' +\
             f'\nTotal inc GST: {self.total_inc_GST:>8.2f}'
+
+    def to_forms(self, filename):
+        canvas = canvas.Canvas(f'.\\test_output\\{filename}.pdf', pagesize=A4)
+        for claim in self.claims:
+            claim.to_form(canvas)
+        canvas.save()
+        return canvas
+
 
 def check_nhi(nhi):
     '''Uses the check digit to verify that NHI is valid'''

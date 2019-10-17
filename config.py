@@ -3,14 +3,22 @@ GST = 0.15
 MAX_CLAIMS = 50
 
 SDSC = {'name' : 'SDSC',
-        'plannum'      : 1,
-        'claimform'    : 32,
-        'pa_claimform' : 21}
+        'plannum' : 1,
+        'claimform' : 32,
+        'pa_claimform' : 21,
+        'form_img' : '.\\resouces\\SDSC_claimform.jpg',
+        'form_length' : 5,
+        'form_length_pa' : 5
+        }
 
 OHSA = {'name' : 'OHSA',
-        'plannum'       : 7,
-        'claimform'    : 33,
-        'pa_claimform' : 35}
+        'plannum' : 7,
+        'claimform' : 33,
+        'pa_claimform' : 35,
+        'form_img' : '.\\resources\\SDSC_claimform.jpg',
+        'form_length' : 8,
+        'form_length_pa': 6
+        }
 
 schools = {
 #CDC
@@ -135,7 +143,7 @@ teeth = {'1': '18', '10': '22', '11': '23', '12': '24', '13': '25', '14': '26', 
         'Q': '82', 'R': '83', 'S': '84', 'T': '85'}
 
 create_view_claims_waiting = '''
-DROP VIEW _claims_waiting;''' +\
+DROP VIEW _claims_waiting;\n''' +\
 '''
 CREATE VIEW _claims_waiting AS
 SELECT
@@ -159,7 +167,7 @@ WHERE c.claimstatus = 'W';
 '''
 
 create_view_get_procedures = '''
-DROP VIEW _get_procedures;''' +\
+DROP VIEW _get_procedures;\n''' +\
 '''
 CREATE VIEW _get_procedures AS
 SELECT
