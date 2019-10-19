@@ -210,7 +210,7 @@ DROP VIEW _claims_waiting;\n''' +\
 CREATE VIEW _claims_waiting AS
 SELECT
     c.claimnum AS claimnum,
-    c.claimform AS claimform
+    c.claimform AS claimform,
     p.patnum AS patnum,
     p.fname AS first_name,
     p.lname AS last_name,
