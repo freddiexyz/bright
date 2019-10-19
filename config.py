@@ -1,23 +1,85 @@
+# for reportlabs default A4 page
+left_margin_1 = 36
+left_margin_2 = 310
+
+proc_line_height = 280
+proc_line_height_pa = 168
+proc_line_step = 18
+
+proc_date_width = 36
+proc_code_width = 90
+proc_quantity_width = 320
+proc_teeth_width = 360
+proc_fee_width = 445
+
+SDSC_form_coords = {
+    'patient' : {
+        'NHI' : (left_margin_1, 717, {'charSpace' : 11}),
+        'birthdate' : (left_margin_1, 678, {'charSpace' : 11}),
+        'school' : (left_margin_1, 590, {}),
+        'city' : (left_margin_1, 550, {}),
+        'last_name' : (left_margin_2, 717, {}),
+        'first_name' : (left_margin_2, 678, {}),
+        'address' : (left_margin_2, 630, {}),
+        # 'provider' : (),
+        'prov_city' : (left_margin_2, 550, {})
+    },
+    'procedures' : {
+        'date' : (proc_date_width, proc_line_height, {}),
+        'code' : (proc_code_width, proc_line_height, {}),
+        'quantity' : (proc_quantity_width, proc_line_height, {}),
+        'teeth' : (proc_teeth_width, proc_line_height, {}),
+        'fee' : (proc_fee_width, proc_line_height, {'direction' : 'RTL'})
+    },
+    'procedures_pa' : {
+        'date' : (proc_date_width, proc_line_height_pa, {}),
+        'code' : (proc_code_width, proc_line_height_pa, {}),
+        'quantity' : (proc_quantity_width, proc_line_height_pa, {}),
+        'teeth' : (proc_teeth_width, proc_line_height_pa, {}),
+        'fee' : (proc_fee_width, proc_line_height_pa, {})
+    },
+    'prior_approval' : (),
+    'total' : (proc_fee_width, 80, {})
+}
+
+OHSA_form_coords = {
+    'patient' : {
+
+    },
+    'capitated' : {
+
+    },
+    'procedures' : {
+
+    },
+    'procedures_pa' : {
+    
+    },
+    'prior_approval' : (),
+    'total' : ()
+}
 GST = 0.15
 
-MAX_CLAIMS = 50
+MAX_CLAIMS = 1
 
 SDSC = {'name' : 'SDSC',
         'plannum' : 1,
         'claimform' : 32,
         'pa_claimform' : 21,
-        'form_img' : '.\\resouces\\SDSC_claimform.jpg',
+        'form_img' : 'resources\\SDSC_claimform.jpg',
         'form_length' : 5,
-        'form_length_pa' : 5
+        'form_length_pa' : 5,
+        'form_coords' : SDSC_form_coords
         }
 
 OHSA = {'name' : 'OHSA',
         'plannum' : 7,
         'claimform' : 33,
         'pa_claimform' : 35,
-        'form_img' : '.\\resources\\SDSC_claimform.jpg',
+        'form_img' : 'resources\\OHSA_claimform.jpg',
         'form_length' : 8,
-        'form_length_pa': 6
+        'form_length_pa': 6,
+        'form_coords' : OHSA_form_coords
         }
 
 schools = {

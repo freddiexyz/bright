@@ -1,12 +1,14 @@
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 # import openpyxl
-import argparse
+# import argparse
 import _secret
 import config
 import records
-import sys
+# import sys
+# import os
 import re
+
 
 class Database(records.Database):
 
@@ -18,9 +20,12 @@ class Claim():
 
     def __init__(self, patient, procedures, carrier):
         self.patient = patient
+        self.patient['birthdate'] = self.patient['birthdate'].strftime("%d%m%Y")
+        self.patient['prov_city'] = 'Christchurch'
         self.procedures = procedures
         self.carrier = carrier
         self.missing_info = []
+
 
         if self.carrier['name'] == 'OHSA':
             #TODO: deal with capitated procedures
@@ -29,8 +34,8 @@ class Claim():
         self.fee = 0
         for proc in self.procedures:
             self.fee += proc['fee']
+            proc['fee'] = f"{proc['fee']:.2f}"
             proc['date'] = proc['proc_date'].strftime("%d.%m.%y")
-            # if teeth := proc['teeth']: 3.8 when
             if proc['teeth']:
                 proc['teeth'] = ','.join(config.teeth[tooth] for tooth in proc['teeth'].split(',') if tooth.isalnum())
 
@@ -82,17 +87,25 @@ class Claim():
             # TODO: match decile to DBCON code/fee to ensure correct decile band being claimed
         return not self.missing_info
 
-    def to_form(self, canvas):
+    def to_form(self, cvs):
         form_length = self.carrier['form_length_pa'] if self.patient['claimform'] ==\
-         self.carrier['pa_claimform'] else self.carrier['form_length']
-        for page in range(((len(self) - 1) // form_length) + 1):
-            self.to_page(canvas)
+            self.carrier['pa_claimform'] else self.carrier['form_length']
+        for page_num in range(((len(self) - 1) // form_length) + 1):
+            procs = self.procedures[0+page_num*form_length:form_length+page_num*form_length]
+            self.to_page(cvs, procs)
 
-    def to_page(self, canvas):
+    def to_page(self, cvs, procs):
         width, height = A4
-        canvas.setFont('Courier', 55)
-        canvas.drawImage(self.carrier['form_img'], width=width, height=height)
-        canvas.showPage()
+        cvs.drawImage(self.carrier['form_img'], 0,0, width=width, height=height) # fullpage
+        cvs.setFont('Courier', 12)
+        for field, coords in self.carrier['form_coords']['patient'].items():
+            cvs.drawString(coords[0], coords[1], self.patient[field], **coords[2])
+        cvs.setFont('Courier', 10)
+        for num, proc in enumerate(procs):
+            for field, coords in self.carrier['form_coords']['procedures'].items():
+                cvs.drawString(coords[0], coords[1]-(num*config.proc_line_step), str(proc[field]), **coords[2])
+
+        cvs.showPage()
 
 
         
@@ -112,12 +125,22 @@ class Summary():
             f'\nGST: {self.GST:>8.2f}' +\
             f'\nTotal inc GST: {self.total_inc_GST:>8.2f}'
 
+    @classmethod
+    def from_waiting(cls, db, carrier):
+        claims = []
+        gen = Claim.gen_from_waiting(db, carrier)
+        while len(claims) < config.MAX_CLAIMS:
+            claim = next(gen)
+            if claim.validate() and any(float(proc['fee']) > 100 for proc in claim.procedures):
+                claims.append(claim)
+        return cls(claims)
+
     def to_forms(self, filename):
-        canvas = canvas.Canvas(f'.\\test_output\\{filename}.pdf', pagesize=A4)
+        cvs = canvas.Canvas(f'.\\test_output\\{filename}.pdf', pagesize=A4)
         for claim in self.claims:
-            claim.to_form(canvas)
-        canvas.save()
-        return canvas
+            claim.to_form(cvs)
+        cvs.save()
+        return cvs
 
 
 def check_nhi(nhi):
@@ -141,7 +164,7 @@ def check_cds_ref(ref_num):
     ref_num = ref_num.strip().upper()
     if ref_num == '.':
         return True
-    if re.fullmatch('^\d{6}[-|\s]?(SED|SDB|SED/SDB|SDB/SED|ACC)$', ref_num):
+    if re.fullmatch('^\d{6}[-|\s]?[A-Z]{3}.*', ref_num):
         return True
     if re.fullmatch('^SED-\d{3}-\d{4}$', ref_num):
         return True
@@ -159,7 +182,9 @@ def get_decile(pat_school):
 
 if __name__ == '__main__':
     with Database() as db:
+        Summary.from_waiting(db, config.SDSC).to_forms('test')
+
         # s = Summary(claim for claim in Claim.gen_from_waiting(db, config.SDSC) if claim.validate())
-        # print(s)
-        for claim in (Claim.gen_from_waiting(db, config.OHSA)):
-            print('Ready' if claim.validate() else claim.missing_info)
+        # for claim in (Claim.gen_from_waiting(db, config.SDSC)):
+        #     print(f"{claim.patient['first_name']} {claim.patient['last_name']}")
+        #     print('\tReady' if claim.validate() else f'\t{claim.missing_info}')

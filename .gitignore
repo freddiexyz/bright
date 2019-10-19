@@ -1,5 +1,6 @@
 # passwords and shit
 _secret.py
+test_output/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
