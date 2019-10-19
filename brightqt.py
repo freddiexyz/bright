@@ -25,6 +25,7 @@ class Claim():
         self.procedures = procedures
         self.carrier = carrier
         self.missing_info = []
+        self.is_pa = (self.patient['claimform'] == self.carrier['pa_claimform'])
 
 
         if self.carrier['name'] == 'OHSA':
@@ -37,14 +38,16 @@ class Claim():
             proc['fee'] = f"{proc['fee']:.2f}"
             proc['date'] = proc['proc_date'].strftime("%d.%m.%y")
             if proc['teeth']:
-                proc['teeth'] = ','.join(config.teeth[tooth] for tooth in proc['teeth'].split(',') if tooth.isalnum())
+                proc['teeth'] = ','.join(config.teeth[tooth] for tooth in proc['teeth'].split(',')\
+                 if tooth.isalnum())
 
     def __len__(self):
         return len(self.procedures)
 
     def __str__(self):
         return f"{self.patient['last_name']}, {self.patient['first_name']}\n\t" +\
-            "\n\t".join("{proc_date} | {code} | {quantity} | {fee:>6.2f} | {teeth}".format(**proc) for proc in self.procedures)
+            "\n\t".join("{proc_date} | {code} | {quantity} | {fee:>6.2f} | {teeth}".format(
+                **proc) for proc in self.procedures)
 
     @classmethod
     def gen_from_waiting(cls, db, carrier):
@@ -69,7 +72,7 @@ class Claim():
 
     def validate(self):
         # prior approval claims need prior approval numbers
-        if self.patient['claimform'] == self.carrier['pa_claimform'] and not self.patient['prior_approval']:
+        if self.is_pa and not self.patient['prior_approval']:
             self.missing_info.append('prior_approval')
         # all claims need valid NHIs
         if not check_nhi(self.patient['NHI']):
@@ -88,23 +91,28 @@ class Claim():
         return not self.missing_info
 
     def to_form(self, cvs):
-        form_length = self.carrier['form_length_pa'] if self.patient['claimform'] ==\
-            self.carrier['pa_claimform'] else self.carrier['form_length']
+        form_length = self.carrier['form_length_pa'] if self.is_pa else self.carrier['form_length']
         for page_num in range(((len(self) - 1) // form_length) + 1):
-            procs = self.procedures[0+page_num*form_length:form_length+page_num*form_length]
+            procs = self.procedures[page_num*form_length:(page_num+1)*form_length] #what
             self.to_page(cvs, procs)
 
     def to_page(self, cvs, procs):
         width, height = A4
-        cvs.drawImage(self.carrier['form_img'], 0,0, width=width, height=height) # fullpage
+        cvs.drawImage(self.carrier['form_img'], 0,0, width=width, height=height) # fullpage image
         cvs.setFont('Courier', 12)
         for field, coords in self.carrier['form_coords']['patient'].items():
             cvs.drawString(coords[0], coords[1], self.patient[field], **coords[2])
-        cvs.setFont('Courier', 10)
+        cvs.setFont('Courier', 10) # so it will fit
+        proc_coords = 'procedures_pa' if self.is_pa else 'procedures'
         for num, proc in enumerate(procs):
-            for field, coords in self.carrier['form_coords']['procedures'].items():
-                cvs.drawString(coords[0], coords[1]-(num*config.proc_line_step), str(proc[field]), **coords[2])
+            for field, coords in self.carrier['form_coords'][proc_coords].items():
+                cvs.drawString(coords[0], coords[1]-(num*config.proc_line_step), str(proc[field]))
 
+        if self.is_pa:
+            coords = self.carrier['form_coords']['prior_approval']
+            cvs.drawString(coords[0], coords[1], self.patient.prior_approval)
+        coords = self.carrier['form_coords']['total']
+        cvs.drawString(coords[0], coords[1], str(self.fee))
         cvs.showPage()
 
 
@@ -131,7 +139,7 @@ class Summary():
         gen = Claim.gen_from_waiting(db, carrier)
         while len(claims) < config.MAX_CLAIMS:
             claim = next(gen)
-            if claim.validate() and any(float(proc['fee']) > 100 for proc in claim.procedures):
+            if claim.validate():
                 claims.append(claim)
         return cls(claims)
 
@@ -176,15 +184,10 @@ def get_decile(pat_school):
     '''Attempts to match a given school to know schools'''
     for school in config.schools:
         if any(re.fullmatch(f"^{pattern}.*$", pat_school.upper().strip()) for pattern in school):
-            return config.schools[school] # decile
-    return 0
+            return config.schools[school]
+    return 0 # placeholder for not found or N/A
 
 
 if __name__ == '__main__':
     with Database() as db:
         Summary.from_waiting(db, config.SDSC).to_forms('test')
-
-        # s = Summary(claim for claim in Claim.gen_from_waiting(db, config.SDSC) if claim.validate())
-        # for claim in (Claim.gen_from_waiting(db, config.SDSC)):
-        #     print(f"{claim.patient['first_name']} {claim.patient['last_name']}")
-        #     print('\tReady' if claim.validate() else f'\t{claim.missing_info}')
