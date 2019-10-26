@@ -221,6 +221,7 @@ CREATE VIEW _claims_waiting AS
 SELECT
     c.claimnum AS claimnum,
     c.claimform AS claimform,
+    c.dateservice as claimdate,
     p.patnum AS patnum,
     p.fname AS first_name,
     p.lname AS last_name,
@@ -257,8 +258,7 @@ GROUP BY c.claimnum, pl.procdate, cp.codesent, pl.procfee
 '''
 
 SELECT_PATIENTS = '''
-SELECT cw.* # claimnum, patnum, first_name, last_name, birthdate, nhi,
-            # gender, address, city, school, subscriberid, prior_approval
+SELECT cw.* # see claims waiting view for fields
 FROM _claims_waiting cw
 INNER JOIN claim c ON cw.claimnum = c.claimnum
 WHERE c.plannum = {plannum}

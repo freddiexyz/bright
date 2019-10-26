@@ -1,14 +1,17 @@
+from openpyxl.worksheet.table import Table, TableStyleInfo
+from openpyxl import Workbook
+
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
-import openpyxl
-# import argparse
+
+from datetime import date
+
 import _secret
-import config
 import records
-# import sys
-# import os
+import config
 import re
 
+# do next: test Summary.to_spreadsheet and implement updating database for sending claims
 
 class Database(records.Database):
 
@@ -20,13 +23,13 @@ class Claim():
 
     def __init__(self, patient, procedures, carrier):
         self.patient = patient
+        self.patient['patient name'] = self.patient['first_name'] + ' ' + self.patient['last_name']
         self.patient['birthdate'] = self.patient['birthdate'].strftime("%d%m%Y")
         self.patient['prov_city'] = 'Christchurch'
         self.procedures = procedures
         self.carrier = carrier
         self.missing_info = []
-        self.is_pa = (self.patient['claimform'] == self.carrier['pa_claimform'])
-
+        self.is_pa = bool(self.patient['claimform'] == self.carrier['pa_claimform'])
 
         if self.carrier['name'] == 'OHSA':
             #TODO: deal with capitated procedures
@@ -51,10 +54,9 @@ class Claim():
 
     @classmethod
     def gen_from_waiting(cls, db, carrier):
-        # claimnum, claimform, patnum, first_name, last_name, birthdate, NHI,
-        # gender, address, city, school, subnum, prior_approval
+        # see claims waiting view for fields
         patients = db.query(config.SELECT_PATIENTS.format(**carrier)).all(as_dict=True)
-        # procnum, code, proc_date, fee, quantity, teeth
+        # fields: procnum, code, proc_date, fee, quantity, teeth
         procedures = db.query(config.SELECT_PROCEDURES.format(**carrier)).all(as_dict=True)
 
         # merge sort dual indicies, requires lists sorted by claimnum
@@ -90,11 +92,6 @@ class Claim():
             # TODO: match decile to DBCON code/fee to ensure correct decile band being claimed
         return not self.missing_info
 
-    def draw(self, cvs, value, coords):
-        if coords[2:]:
-            cvs.drawString(coords[0], coords[1], str(value), **coords[2])
-        else:
-            cvs.drawString(coords[0], coords[1], str(value))
 
 
     def to_form(self, cvs):
@@ -104,30 +101,29 @@ class Claim():
             self.to_page(cvs, procs)
 
     def to_page(self, cvs, procs):
+        # TODO: tickboxes
         width, height = A4
         cvs.drawImage(self.carrier['form_img'], 0,0, width=width, height=height) # fullpage image
         pat_coords = self.carrier['form_coords']['patient']
         if self.is_pa:
             proc_coords = self.carrier['form_coords']['procedures_pa']
-            self.draw(cvs, self.patient['prior_approval'],
-                self.carrier['form_coords']['prior_approval'])
-
+            draw(cvs, self.patient['prior_approval'],
+                *self.carrier['form_coords']['prior_approval'])
         else:
             proc_coords = self.carrier['form_coords']['procedures']
 
-        cvs.setFont('Courier', 12)
+        cvs.setFont('Courier', 12) # courier since monospaced
         for field, coords in pat_coords.items():
-            self.draw(cvs, self.patient[field], coords)
+            draw(cvs, self.patient[field], *coords)
 
         cvs.setFont('Courier', 10) # so it will fit
         for num, proc in enumerate(procs):
             for field, coords in proc_coords.items():
-                cvs.drawString(coords[0], coords[1]-(num*config.proc_line_step), str(proc[field]))
+                # lowers height of each line by set amount each procedure
+                draw(cvs, str(proc[field]), coords[0], coords[1]-(num*config.proc_line_step))
 
-        self.draw(cvs, self.fee, self.carrier['form_coords']['total'])
+        draw(cvs, self.fee, *self.carrier['form_coords']['total'])
         cvs.showPage()
-
-
         
 class Summary():
     def __init__(self, claims, carrier):
@@ -150,10 +146,13 @@ class Summary():
     def from_waiting(cls, db, carrier):
         claims = []
         gen = Claim.gen_from_waiting(db, carrier)
-        while len(claims) < config.MAX_CLAIMS:
-            claim = next(gen)
-            if claim.validate():
-                claims.append(claim)
+        try:
+            while len(claims) < config.MAX_CLAIMS:
+                claim = next(gen)
+                if claim.validate():
+                    claims.append(claim)
+        except StopIteration:
+            pass
         return cls(claims, carrier)
 
     def to_forms(self, filename):
@@ -167,7 +166,50 @@ class Summary():
         # do this once templates available in pdf
         pass
 
+    def to_spreadsheet(self, filename):
+        wb = Workbook()
+        ws = wb.active()
+        ws['C1'] = filename
+        
+        ws.column_dimensions['C'].width = 35
+        ws.column_dimensions['D'].width = 13
+        ws.column_dimensions['E'].width = 13
+        
+        columns = {
+            'A' : 'claimnum',
+            'B' : 'NHI',
+            'C' : 'patient name',
+            'D' : 'date',
+            'E' : 'fee',
+        }
 
+        for column, field in columns.items():
+            ws[f'{column}2'] = field.title()
+
+        for num, claim in enumerate(self.claims):
+            for column, field in columns.items():
+                ws[f'{column}{num + 3}'] = claim[field]
+                if column == 'E':
+                    ws[f'{column}{num}'].style = 'Currency'
+
+        table = Table(displayName="Table1", ref=f'A2:E{len(self) + 2}')
+        style = TableStyleInfo(name="TableStyleMedium1", showFirstColumn=False,
+            showLastColumn=False, showRowStripes=True, showColumnStripes=False)
+        table.tableStyleInfo = style
+        ws.add_table(table)
+
+        for num, value in enumerate(self.total, self.GST, self.total_inc_GST):
+            ws[f'E{len(self) + num + 3}'] = value
+            ws[f'E{len(self) + num + 3}'].style = 'Currency'
+
+        wb.save(f'{filename}.xls')
+
+
+def draw(cvs, value, *coords):
+    if coords[2:]:
+        cvs.drawString(coords[0], coords[1], str(value), **coords[2])
+    else:
+        cvs.drawString(coords[0], coords[1], str(value))
 
 def check_nhi(nhi):
     '''Uses the check digit to verify that NHI is valid'''
