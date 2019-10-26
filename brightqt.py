@@ -1,6 +1,6 @@
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
-# import openpyxl
+import openpyxl
 # import argparse
 import _secret
 import config
@@ -90,36 +90,49 @@ class Claim():
             # TODO: match decile to DBCON code/fee to ensure correct decile band being claimed
         return not self.missing_info
 
+    def draw(self, cvs, value, coords):
+        if coords[2:]:
+            cvs.drawString(coords[0], coords[1], str(value), **coords[2])
+        else:
+            cvs.drawString(coords[0], coords[1], str(value))
+
+
     def to_form(self, cvs):
         form_length = self.carrier['form_length_pa'] if self.is_pa else self.carrier['form_length']
         for page_num in range(((len(self) - 1) // form_length) + 1):
-            procs = self.procedures[page_num*form_length:(page_num+1)*form_length] #what
+            procs = self.procedures[page_num*form_length:(page_num+1)*form_length] # what
             self.to_page(cvs, procs)
 
     def to_page(self, cvs, procs):
         width, height = A4
         cvs.drawImage(self.carrier['form_img'], 0,0, width=width, height=height) # fullpage image
+        pat_coords = self.carrier['form_coords']['patient']
+        if self.is_pa:
+            proc_coords = self.carrier['form_coords']['procedures_pa']
+            self.draw(cvs, self.patient['prior_approval'],
+                self.carrier['form_coords']['prior_approval'])
+
+        else:
+            proc_coords = self.carrier['form_coords']['procedures']
+
         cvs.setFont('Courier', 12)
-        for field, coords in self.carrier['form_coords']['patient'].items():
-            cvs.drawString(coords[0], coords[1], self.patient[field], **coords[2])
+        for field, coords in pat_coords.items():
+            self.draw(cvs, self.patient[field], coords)
+
         cvs.setFont('Courier', 10) # so it will fit
-        proc_coords = 'procedures_pa' if self.is_pa else 'procedures'
         for num, proc in enumerate(procs):
-            for field, coords in self.carrier['form_coords'][proc_coords].items():
+            for field, coords in proc_coords.items():
                 cvs.drawString(coords[0], coords[1]-(num*config.proc_line_step), str(proc[field]))
 
-        if self.is_pa:
-            coords = self.carrier['form_coords']['prior_approval']
-            cvs.drawString(coords[0], coords[1], self.patient.prior_approval)
-        coords = self.carrier['form_coords']['total']
-        cvs.drawString(coords[0], coords[1], str(self.fee))
+        self.draw(cvs, self.fee, self.carrier['form_coords']['total'])
         cvs.showPage()
 
 
         
 class Summary():
-    def __init__(self, claims):
+    def __init__(self, claims, carrier):
         self.claims = tuple(claims)
+        self.carrier = carrier
         self.total = sum(claim.fee for claim in self.claims)
         self.GST = self.total * config.GST
         self.total_inc_GST = self.total + self.GST
@@ -141,7 +154,7 @@ class Summary():
             claim = next(gen)
             if claim.validate():
                 claims.append(claim)
-        return cls(claims)
+        return cls(claims, carrier)
 
     def to_forms(self, filename):
         cvs = canvas.Canvas(f'.\\test_output\\{filename}.pdf', pagesize=A4)
@@ -149,6 +162,11 @@ class Summary():
             claim.to_form(cvs)
         cvs.save()
         return cvs
+
+    def to_summary_form(self, filename):
+        # do this once templates available in pdf
+        pass
+
 
 
 def check_nhi(nhi):
