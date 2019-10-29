@@ -1,6 +1,6 @@
-GST = 0.15
+MAX_CLAIMS = 10
 
-MAX_CLAIMS = 1
+GST = 0.15
 
 # for reportlabs default A4 page
 left_margin_1 = 36
@@ -42,7 +42,7 @@ SDSC_form_coords = {
         'teeth' : (proc_teeth_width, proc_line_height_pa),
         'fee' : (proc_fee_width, proc_line_height_pa)
     },
-    'prior_approval' : (),
+    'prior_approval' : (0,0),
     'total' : (proc_fee_width, 80)
 }
 
@@ -274,4 +274,10 @@ INNER JOIN claim c on cp.claimnum = c.claimnum
 WHERE c.plannum = {plannum}
 AND c.claimform in ({claimform}, {pa_claimform})
 ORDER BY c.claimnum;
+'''
+
+UPDATE_CLAIMSTATUS = '''
+UPDATE claim
+SET claimstatus = '{}'
+WHERE claimnum in ({})
 '''

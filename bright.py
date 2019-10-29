@@ -11,7 +11,7 @@ import records
 import config
 import re
 
-# do next: test Summary.to_spreadsheet and implement updating database for sending claims
+# do next: implement updating database for sending claims
 
 class Database(records.Database):
 
@@ -23,26 +23,27 @@ class Claim():
 
     def __init__(self, patient, procedures, carrier):
         self.patient = patient
+        self.procedures = procedures
+        self.carrier = carrier
         self.patient['patient name'] = self.patient['first_name'] + ' ' + self.patient['last_name']
         self.patient['birthdate'] = self.patient['birthdate'].strftime("%d%m%Y")
         self.patient['prov_city'] = 'Christchurch'
-        self.procedures = procedures
-        self.carrier = carrier
         self.missing_info = []
         self.is_pa = bool(self.patient['claimform'] == self.carrier['pa_claimform'])
-
         if self.carrier['name'] == 'OHSA':
             #TODO: deal with capitated procedures
             self.patient['decile'] = get_decile(self.patient['school'])
 
-        self.fee = 0
+        fee = 0
         for proc in self.procedures:
-            self.fee += proc['fee']
-            proc['fee'] = f"{proc['fee']:.2f}"
+            fee += proc['fee']
+            proc['fee'] = f"{proc['fee']:.2f}" # 2 decimal place float since currency
             proc['date'] = proc['proc_date'].strftime("%d.%m.%y")
             if proc['teeth']:
                 proc['teeth'] = ','.join(config.teeth[tooth] for tooth in proc['teeth'].split(',')\
-                 if tooth.isalnum())
+                 if tooth.isalnum()) # conversion to not american notation
+
+        self.patient['fee'] = fee # sum of procedures
 
     def __len__(self):
         return len(self.procedures)
@@ -92,8 +93,6 @@ class Claim():
             # TODO: match decile to DBCON code/fee to ensure correct decile band being claimed
         return not self.missing_info
 
-
-
     def to_form(self, cvs):
         form_length = self.carrier['form_length_pa'] if self.is_pa else self.carrier['form_length']
         for page_num in range(((len(self) - 1) // form_length) + 1):
@@ -122,14 +121,20 @@ class Claim():
                 # lowers height of each line by set amount each procedure
                 draw(cvs, str(proc[field]), coords[0], coords[1]-(num*config.proc_line_step))
 
-        draw(cvs, self.fee, *self.carrier['form_coords']['total'])
+        draw(cvs, self.patient['fee'], *self.carrier['form_coords']['total'])
         cvs.showPage()
+
+    def update_claimstatus(self, db, status):
+        assert status in ('S', 'R', 'W', 'H') # sent, recieved, waiting, hold
+        print(config.UPDATE_CLAIMSTATUS.format(status, self.patient['claimnum']))
+        # db.query(config.UPDATE_CLAIMSTATUS.format(status, claimnums))
+
         
 class Summary():
     def __init__(self, claims, carrier):
         self.claims = tuple(claims)
         self.carrier = carrier
-        self.total = sum(claim.fee for claim in self.claims)
+        self.total = sum(claim.patient['fee'] for claim in self.claims)
         self.GST = self.total * config.GST
         self.total_inc_GST = self.total + self.GST
 
@@ -151,6 +156,8 @@ class Summary():
                 claim = next(gen)
                 if claim.validate():
                     claims.append(claim)
+                else:
+                    pass # deal with claims needing info
         except StopIteration:
             pass
         return cls(claims, carrier)
@@ -168,7 +175,7 @@ class Summary():
 
     def to_spreadsheet(self, filename):
         wb = Workbook()
-        ws = wb.active()
+        ws = wb.active
         ws['C1'] = filename
         
         ws.column_dimensions['C'].width = 35
@@ -179,7 +186,7 @@ class Summary():
             'A' : 'claimnum',
             'B' : 'NHI',
             'C' : 'patient name',
-            'D' : 'date',
+            'D' : 'claimdate',
             'E' : 'fee',
         }
 
@@ -188,9 +195,9 @@ class Summary():
 
         for num, claim in enumerate(self.claims):
             for column, field in columns.items():
-                ws[f'{column}{num + 3}'] = claim[field]
+                ws[f'{column}{num + 3}'] = claim.patient[field]
                 if column == 'E':
-                    ws[f'{column}{num}'].style = 'Currency'
+                    ws[f'{column}{num + 3}'].style = 'Currency'
 
         table = Table(displayName="Table1", ref=f'A2:E{len(self) + 2}')
         style = TableStyleInfo(name="TableStyleMedium1", showFirstColumn=False,
@@ -198,14 +205,21 @@ class Summary():
         table.tableStyleInfo = style
         ws.add_table(table)
 
-        for num, value in enumerate(self.total, self.GST, self.total_inc_GST):
+        for num, value in enumerate((self.total, self.GST, self.total_inc_GST)):
             ws[f'E{len(self) + num + 3}'] = value
             ws[f'E{len(self) + num + 3}'].style = 'Currency'
 
-        wb.save(f'{filename}.xls')
+        wb.save(f'test_output\\{filename}.xls')
+
+    def update_claimstatus(self, db, status):
+        assert status in ('S', 'R', 'W', 'H') # sent, recieved, waiting, hold
+        claimnums = ','.join(str(claim.patient['claimnum']) for claim in self.claims)
+        print(config.UPDATE_CLAIMSTATUS.format(status, claimnums))
+        # db.query(config.UPDATE_CLAIMSTATUS.format(status, claimnums))
 
 
 def draw(cvs, value, *coords):
+    # wrapper for reportlabs.canvas.Canvas.drawString
     if coords[2:]:
         cvs.drawString(coords[0], coords[1], str(value), **coords[2])
     else:
@@ -241,7 +255,7 @@ def check_cds_ref(ref_num):
     return False
 
 def get_decile(pat_school):
-    '''Attempts to match a given school to know schools'''
+    '''Attempts to match a given school to known schools'''
     for school in config.schools:
         if any(re.fullmatch(f"^{pattern}.*$", pat_school.upper().strip()) for pattern in school):
             return config.schools[school]
@@ -250,4 +264,8 @@ def get_decile(pat_school):
 
 if __name__ == '__main__':
     with Database() as db:
-        Summary.from_waiting(db, config.SDSC).to_forms('test')
+        test = Summary.from_waiting(db, config.SDSC)
+        test.update_claimstatus(db, 'S')
+        test.to_forms('test')
+        test.to_summary_form('test') # doesn't do anything yet lole
+        test.to_spreadsheet('test')
