@@ -18,29 +18,29 @@ proc_fee_width = 445
 
 SDSC_form_coords = {
     'patient' : {
-        'NHI' : (left_margin_1, 717, {'charSpace' : 11}),
-        'birthdate' : (left_margin_1, 678, {'charSpace' : 11}),
-        'school' : (left_margin_1, 590,),
-        'city' : (left_margin_1, 550),
-        'last_name' : (left_margin_2, 717),
+        'NHI'        : (left_margin_1, 717, {'charSpace' : 11}),
+        'birthdate'  : (left_margin_1, 678, {'charSpace' : 11}),
+        'school'     : (left_margin_1, 590),
+        'city'       : (left_margin_1, 550),
+        'last_name'  : (left_margin_2, 717),
         'first_name' : (left_margin_2, 678),
-        'address' : (left_margin_2, 630),
+        'address'    : (left_margin_2, 630),
         # 'provider' : (),
-        'prov_city' : (left_margin_2, 550)
+        'prov_city'  : (left_margin_2, 550)
     },
     'procedures' : {
-        'date' : (proc_date_width, proc_line_height),
-        'code' : (proc_code_width, proc_line_height),
+        'date'     : (proc_date_width,     proc_line_height),
+        'code'     : (proc_code_width,     proc_line_height),
         'quantity' : (proc_quantity_width, proc_line_height),
-        'teeth' : (proc_teeth_width, proc_line_height),
-        'fee' : (proc_fee_width, proc_line_height,)
+        'teeth'    : (proc_teeth_width,    proc_line_height),
+        'fee'      : (proc_fee_width,      proc_line_height)
     },
     'procedures_pa' : {
-        'date' : (proc_date_width, proc_line_height_pa),
-        'code' : (proc_code_width, proc_line_height_pa),
+        'date'     : (proc_date_width,     proc_line_height_pa),
+        'code'     : (proc_code_width,     proc_line_height_pa),
         'quantity' : (proc_quantity_width, proc_line_height_pa),
-        'teeth' : (proc_teeth_width, proc_line_height_pa),
-        'fee' : (proc_fee_width, proc_line_height_pa)
+        'teeth'    : (proc_teeth_width,    proc_line_height_pa),
+        'fee'      : (proc_fee_width,      proc_line_height_pa)
     },
     'prior_approval' : (0,0),
     'total' : (proc_fee_width, 80)
@@ -63,6 +63,15 @@ OHSA_form_coords = {
     'total' : ()
 }
 
+summary_left_margin = 60
+SDSC_summary_coords = {
+    'claim_reference'  : (summary_left_margin, 625),
+    'payee_number'     : (summary_left_margin, 570),
+    'agreement_number' : (summary_left_margin, 515),
+    'agreement_name'   : (summary_left_margin, 462),
+    'DCNZ_number'      : (summary_left_margin, 405)
+}
+
 SDSC = {
     'name' : 'SDSC',
     'plannum' : 1,
@@ -71,7 +80,8 @@ SDSC = {
     'form_img' : 'resources\\SDSC_claimform.jpg',
     'form_length' : 5,
     'form_length_pa' : 5,
-    'form_coords' : SDSC_form_coords
+    'form_coords' : SDSC_form_coords,
+    'summary_img' : 'resources\\SDSC_summary.jpg'
 }
 
 OHSA = {

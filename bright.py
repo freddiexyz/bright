@@ -4,14 +4,14 @@ from openpyxl import Workbook
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
-from datetime import date
+from datetime import date, time
 
 import _secret
+import logging
 import records
 import config
 import re
 
-# do next: implement updating database for sending claims
 
 class Database(records.Database):
 
@@ -157,7 +157,7 @@ class Summary():
                 if claim.validate():
                     claims.append(claim)
                 else:
-                    pass # deal with claims needing info
+                    pass # TODO: deal with claims needing info
         except StopIteration:
             pass
         return cls(claims, carrier)
@@ -170,8 +170,17 @@ class Summary():
         return cvs
 
     def to_summary_form(self, filename):
-        # do this once templates available in pdf
-        pass
+        width, height = A4
+        cvs = canvas.Canvas(f'.\\test_output\\test.pdf', pagesize=A4)
+        cvs.drawImage(self.carrier['summary_img'], 0,0, width=width, height=height) # fullpage image
+        
+        # for i in range(0,1000,50):
+        #     cvs.line(0, i, width, i)
+        #     cvs.line(2*i, 0, 2*i, height)
+        for i in config.SDSC_summary_coords.keys():
+            draw(cvs, i, *config.SDSC_summary_coords[i])
+        cvs.save()
+        return cvs
 
     def to_spreadsheet(self, filename):
         wb = Workbook()
@@ -209,7 +218,7 @@ class Summary():
             ws[f'E{len(self) + num + 3}'] = value
             ws[f'E{len(self) + num + 3}'].style = 'Currency'
 
-        wb.save(f'test_output\\{filename}.xls')
+        wb.save(f'test_output\\{filename}.xlsx')
 
     def update_claimstatus(self, db, status):
         assert status in ('S', 'R', 'W', 'H') # sent, recieved, waiting, hold
@@ -265,7 +274,7 @@ def get_decile(pat_school):
 if __name__ == '__main__':
     with Database() as db:
         test = Summary.from_waiting(db, config.SDSC)
-        test.update_claimstatus(db, 'S')
-        test.to_forms('test')
+        # test.update_claimstatus(db, 'S')
+        # test.to_forms('test')
         test.to_summary_form('test') # doesn't do anything yet lole
-        test.to_spreadsheet('test')
+        # test.to_spreadsheet('test')
