@@ -171,14 +171,19 @@ class Summary():
 
     def to_summary_form(self, filename):
         width, height = A4
-        cvs = canvas.Canvas(f'.\\test_output\\test.pdf', pagesize=A4)
+        cvs = canvas.Canvas(f'.\\test_output\\{filename}.pdf', pagesize=A4)
         cvs.drawImage(self.carrier['summary_img'], 0,0, width=width, height=height) # fullpage image
-        
-        # for i in range(0,1000,50):
-        #     cvs.line(0, i, width, i)
-        #     cvs.line(2*i, 0, 2*i, height)
-        for i in config.SDSC_summary_coords.keys():
-            draw(cvs, i, *config.SDSC_summary_coords[i])
+        cvs.setFont('Courier', 12) # courier since monospaced
+
+        for field in _secret.practice_details.keys():
+            draw(cvs, _secret.practice_details[field], *config.summary_coords[field])
+
+        draw(cvs, filename,           *config.summary_coords['claim_reference'])
+        draw(cvs, len(self),          *config.summary_coords['num_patients'])
+        draw(cvs, self.total_inc_GST, *config.summary_coords['fee_inc'])
+        draw(cvs, self.total,         *config.summary_coords['fee_ex'])
+        draw(cvs, self.GST,           *config.summary_coords['GST'])
+
         cvs.save()
         return cvs
 
@@ -229,6 +234,8 @@ class Summary():
 
 def draw(cvs, value, *coords):
     # wrapper for reportlabs.canvas.Canvas.drawString
+    if type(value) is float:
+        value = f'{value:0.2f}'
     if coords[2:]:
         cvs.drawString(coords[0], coords[1], str(value), **coords[2])
     else:
@@ -274,7 +281,7 @@ def get_decile(pat_school):
 if __name__ == '__main__':
     with Database() as db:
         test = Summary.from_waiting(db, config.SDSC)
-        # test.update_claimstatus(db, 'S')
-        # test.to_forms('test')
-        test.to_summary_form('test') # doesn't do anything yet lole
-        # test.to_spreadsheet('test')
+        test.update_claimstatus(db, 'S')
+        test.to_forms('test_forms')
+        test.to_summary_form('test_summary')
+        test.to_spreadsheet('test_spreadsheet')

@@ -63,13 +63,17 @@ OHSA_form_coords = {
     'total' : ()
 }
 
-summary_left_margin = 60
-SDSC_summary_coords = {
-    'claim_reference'  : (summary_left_margin, 625),
-    'payee_number'     : (summary_left_margin, 570),
-    'agreement_number' : (summary_left_margin, 515),
+summary_left_margin = 63
+summary_coords = {
+    'claim_reference'  : (summary_left_margin, 625, {'charSpace' : 16}),
+    'payee_number'     : (summary_left_margin, 570, {'charSpace' : 16}),
+    'agreement_number' : (summary_left_margin, 515, {'charSpace' : 16}),
     'agreement_name'   : (summary_left_margin, 462),
-    'DCNZ_number'      : (summary_left_margin, 405)
+    'DCNZ_number'      : (summary_left_margin, 405, {'charSpace' : 16}),
+    'num_patients'     : (490, 368),
+    'fee_ex'           : (420, 343),
+    'GST'              : (420, 319),
+    'fee_inc'          : (420, 295)
 }
 
 SDSC = {
