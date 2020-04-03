@@ -271,7 +271,67 @@ WHERE c.claimstatus = 'W'
 GROUP BY c.claimnum, pl.procdate, cp.codesent, pl.procfee
 '''
 
-SELECT_PATIENTS = '''
+create_view_claims_sent = '''
+DROP VIEW _claims_sent;\n''' +\
+'''
+CREATE VIEW _claims_sent AS
+SELECT
+    c.claimnum AS claimnum,
+    c.claimform AS claimform,
+    c.dateservice as claimdate,
+    p.patnum AS patnum,
+    p.fname AS first_name,
+    p.lname AS last_name,
+    p.birthdate AS birthdate,
+    p.ssn AS NHI,
+    p.gender AS gender,
+    p.address AS address,
+    p.city AS city,
+    p.schoolname AS school,
+    ins.subscriberid AS subnum,
+    c.priorauthorizationnumber AS prior_approval
+FROM claim c
+INNER JOIN patient p ON c.patnum = p.patnum
+INNER JOIN inssub ins ON c.inssubnum = ins.inssubnum
+INNER JOIN sentclaim sc on c.claimnum = sc.claimnum
+WHERE sc.status = 0;
+'''
+
+create_view_sent_procedures = '''
+CREATE VIEW _sent_procedures AS
+SELECT
+    pl.procnum AS procnum,
+    cp.codesent as code,
+    pl.ProcDate as proc_date,
+    sum(pl.ProcFee) as fee,
+    count(*) as quantity,
+    GROUP_CONCAT(pl.ToothNum) as teeth
+FROM procedurelog pl
+INNER JOIN claimproc cp on pl.procnum = cp.procnum
+INNER JOIN claim c on cp.claimnum = c.claimnum
+INNER JOIN sentclaim sc on c.claimnum = sc.claimnum
+WHERE sc.status = 0
+GROUP BY c.claimnum, pl.procdate, cp.codesent, pl.procfee
+'''
+
+SELECT_PATIENTS_SENT = '''
+SELECT cs.*
+FROM _claims_sent cs
+INNER JOIN sentclaim sc on cs.claimnum = sc.claimnum
+WHERE sc.claimset = '{}'
+ORDER BY sc.claimnum
+'''
+
+SELECT_PROCEDURES_SENT = '''
+SELECT c.claimnum, sp.* # procnum, code, proc_date, fee, quantity, teeth
+FROM _sent_procedures sp
+INNER JOIN claimproc cp on sp.procnum = cp.procnum
+INNER JOIN claim c on cp.claimnum = c.claimnum
+WHERE sc.claimset = 0
+ORDER BY c.claimnum;
+'''
+
+SELECT_PATIENTS_WAITING = '''
 SELECT cw.* # see claims waiting view for fields
 FROM _claims_waiting cw
 INNER JOIN claim c ON cw.claimnum = c.claimnum
@@ -280,7 +340,7 @@ AND c.claimform in ({claimform}, {pa_claimform})
 ORDER BY claimnum;
 '''
 
-SELECT_PROCEDURES = '''
+SELECT_PROCEDURES_WAITING = '''
 SELECT c.claimnum, gp.* # procnum, code, proc_date, fee, quantity, teeth
 FROM _get_procedures gp
 INNER JOIN claimproc cp on gp.procnum = cp.procnum
@@ -293,5 +353,71 @@ ORDER BY c.claimnum;
 UPDATE_CLAIMSTATUS = '''
 UPDATE claim
 SET claimstatus = '{}'
+WHERE claimnum in ({})
+'''
+
+UPDATE_DATESENT = '''
+UPDATE claim
+SET datesent = '{}'
+WHERE claimnum in ({})
+'''
+
+INSERT_CLAIMPAYMENT = '''
+INSERT INTO claimpayment (
+    checkdate,
+    checkamt,
+    note,
+    carriername,
+    ClinicNum,
+    DepositNum,
+    IsPartial,
+    PayType,
+    SecUserNumEntry,
+    Paygroup)
+VALUES ('{date}',
+    {amount},
+    '{note}',
+    '{carrier}',
+    0,
+    0,
+    0,
+    338,
+    11,
+    370);
+SET @ID = (SELECT LAST_INSERT_ID());
+UPDATE claimproc
+SET
+    claimpaymentnum = @ID,
+    InsPayAmt = FeeBilled,
+    status = 1,
+    dateentry = '{date}'
+WHERE claimnum in ({claims});
+UPDATE claim
+SET DateReceived = {date}
+WHERE claimnum in ({claims});
+'''
+
+INSERT_SENTCLAIM = '''
+REPLACE INTO sentclaim (
+    claimnum,
+    claimset,
+    carrier)
+VALUES
+'''
+
+SELECT_SENTCLAIM = '''
+SELECT claimnum
+FROM sentclaim
+WHERE claimset = '{}'
+'''
+
+DELETE_SENTCLAIM = '''
+DELETE FROM sentclaim
+WHERE claimnum in ({})
+'''
+
+UPDATE_SENTCLAIM = '''
+UPDATE sentclaim
+SET status = 1
 WHERE claimnum in ({})
 '''

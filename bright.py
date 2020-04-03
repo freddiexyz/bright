@@ -1,3 +1,5 @@
+# github.com/freddiexyz/bright
+
 from openpyxl.worksheet.table import Table, TableStyleInfo
 from openpyxl import Workbook
 
@@ -56,9 +58,9 @@ class Claim():
     @classmethod
     def gen_from_waiting(cls, db, carrier):
         # see claims waiting view for fields
-        patients = db.query(config.SELECT_PATIENTS.format(**carrier)).all(as_dict=True)
+        patients = db.query(config.SELECT_PATIENTS_WAITING.format(**carrier)).all(as_dict=True)
         # fields: procnum, code, proc_date, fee, quantity, teeth
-        procedures = db.query(config.SELECT_PROCEDURES.format(**carrier)).all(as_dict=True)
+        procedures = db.query(config.SELECT_PROCEDURES_WAITING.format(**carrier)).all(as_dict=True)
 
         # merge sort dual indicies, requires lists sorted by claimnum
         proc_index = 0
@@ -72,6 +74,12 @@ class Claim():
             except IndexError: # exhausted all procedures
                 pass
             yield cls(patient, patient_procs, carrier)
+
+    @classmethod
+    def from_claimnum(cls, db, name):
+        patients = db.query(config.SELECT_PATIENT_SENT.format(name)).all(as_dict=True)
+        procedures = db.query(config.SELECT_PROCEDURES_SENT.format(name)).all(as_dict=True)
+        # TODO : merge patient and procedure lists
 
     def validate(self):
         # prior approval claims need prior approval numbers
@@ -131,12 +139,17 @@ class Claim():
 
         
 class Summary():
-    def __init__(self, claims, carrier):
+    def __init__(self, claims, carrier, name=None):
         self.claims = tuple(claims)
         self.carrier = carrier
         self.total = sum(claim.patient['fee'] for claim in self.claims)
         self.GST = self.total * config.GST
         self.total_inc_GST = self.total + self.GST
+
+        if name is None:
+            self.name = date.today().strftime(f'{self.carrier["name"]}%d%m%y')
+        else:
+            self.name = name
 
     def __len__(self):
         return len(self.claims)
@@ -149,6 +162,7 @@ class Summary():
 
     @classmethod
     def from_waiting(cls, db, carrier):
+        cls.db = db
         claims = []
         gen = Claim.gen_from_waiting(db, carrier)
         try:
@@ -162,6 +176,12 @@ class Summary():
             pass
         return cls(claims, carrier)
 
+    @classmethod
+    def from_sentclaim(cls, db, name):
+        cls.db = db
+        claimnums = db.query(config.SELECT_SENTCLAIM.format(name)).all(as_dict = True)
+        Claim.from_claimnum(db, name)
+
     def to_forms(self, filename):
         cvs = canvas.Canvas(f'.\\test_output\\{filename}.pdf', pagesize=A4)
         for claim in self.claims:
@@ -172,11 +192,11 @@ class Summary():
     def to_summary_form(self, filename):
         width, height = A4
         cvs = canvas.Canvas(f'.\\test_output\\{filename}.pdf', pagesize=A4)
-        cvs.drawImage(self.carrier['summary_img'], 0,0, width=width, height=height) # fullpage image
-        cvs.setFont('Courier', 12) # courier since monospaced
+        cvs.drawImage(self.carrier['summary_img'], 0,0, width=width, height=height)
+        cvs.setFont('Courier', 12)
 
-        for field in _secret.practice_details.keys():
-            draw(cvs, _secret.practice_details[field], *config.summary_coords[field])
+        for field, value in _secret.practice_details.items():
+            draw(cvs, value, *config.summary_coords[field])
 
         draw(cvs, filename,           *config.summary_coords['claim_reference'])
         draw(cvs, len(self),          *config.summary_coords['num_patients'])
@@ -225,12 +245,37 @@ class Summary():
 
         wb.save(f'test_output\\{filename}.xlsx')
 
-    def update_claimstatus(self, db, status):
+    def update_claimstatus(self, status):
         assert status in ('S', 'R', 'W', 'H') # sent, recieved, waiting, hold
         claimnums = ','.join(str(claim.patient['claimnum']) for claim in self.claims)
         print(config.UPDATE_CLAIMSTATUS.format(status, claimnums))
-        # db.query(config.UPDATE_CLAIMSTATUS.format(status, claimnums))
+        # self.db.query(config.UPDATE_CLAIMSTATUS.format(status, claimnums))
 
+    def insert_to_sentclaim(self):
+        claimnums = ',\n'.join(f"({claim.patient['claimnum']}, {self.name}, {self.carrier['name']})" for claim in self.claims)
+        query_string = config.INSERT_SENTCLAIM + claimnums
+        print(query_string)
+
+    def send(self):
+        claimnums = ','.join(str(claim.patient['claimnum']) for claim in self.claims)
+        print(config.UPDATE_CLAIMSTATUS.format('S', claimnums) + ';\n' +\
+            config.UPDATE_DATESENT.format(date.today(), claimnums))
+        # self.db.query(config.UPDATE_DATESENT.format(date.today(), claimnums))
+        self.insert_to_sentclaim()
+        self.to_forms(f'{self.name}_forms')
+        self.to_summary_form(self.name)
+        self.to_spreadsheet(f'{self.name}_spreadsheet')
+
+    def receive(self, db):
+        claimnums = ','.join(str(claim.patient['claimnum']) for claim in self.claims)
+        self.update_claimstatus('R')
+        print(config.UPDATE_SENTCLAIM.format(claimnums))
+        print(config.INSERT_CLAIMPAYMENT.format(
+            carrier = self.carrier['name'],
+            date    = date.today(),
+            amount  = self.total,
+            claims  = claimnums,
+            note    = self.name))
 
 def draw(cvs, value, *coords):
     # wrapper for reportlabs.canvas.Canvas.drawString
@@ -280,8 +325,4 @@ def get_decile(pat_school):
 
 if __name__ == '__main__':
     with Database() as db:
-        test = Summary.from_waiting(db, config.SDSC)
-        test.update_claimstatus(db, 'S')
-        test.to_forms('test_forms')
-        test.to_summary_form('test_summary')
-        test.to_spreadsheet('test_spreadsheet')
+        Summary.from_sentclaim(db, 'SDSC300320')
