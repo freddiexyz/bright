@@ -327,7 +327,8 @@ SELECT c.claimnum, sp.* # procnum, code, proc_date, fee, quantity, teeth
 FROM _sent_procedures sp
 INNER JOIN claimproc cp on sp.procnum = cp.procnum
 INNER JOIN claim c on cp.claimnum = c.claimnum
-WHERE sc.claimset = 0
+INNER JOIN sentclaim sc on c.claimnum = sc.claimnum
+WHERE sc.claimset = '{}'
 ORDER BY c.claimnum;
 '''
 
