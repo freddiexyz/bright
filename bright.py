@@ -70,7 +70,7 @@ class Claim():
             yield cls(patient, patient_procs, carrier)
 
     @classmethod
-    def gen_from_waiting(cls, db, carrier):
+    def from_waiting(cls, db, carrier):
         patients = db.query(config.SELECT_PATIENTS_WAITING.format(**carrier)).all(as_dict=True)
         procedures = db.query(config.SELECT_PROCEDURES_WAITING.format(**carrier)).all(as_dict=True)
 
@@ -80,6 +80,7 @@ class Claim():
     def from_claimnum(cls, db, carrier, name):
         patients = db.query(config.SELECT_PATIENTS_SENT.format(name)).all(as_dict=True)
         procedures = db.query(config.SELECT_PROCEDURES_SENT.format(name)).all(as_dict=True)
+
         return cls.merge(patients, procedures, carrier)
 
     def validate(self):
@@ -167,7 +168,7 @@ class Summary():
     def from_waiting(cls, db, carrier):
         cls.db = db
         claims = []
-        gen = Claim.gen_from_waiting(db, carrier)
+        gen = Claim.from_waiting(db, carrier)
         try:
             while len(claims) < config.MAX_CLAIMS:
                 claim = next(gen)
@@ -194,7 +195,7 @@ class Summary():
         cvs.save()
         return cvs
 
-    def to_summary_form(self, filename):
+    def to_summary(self, filename):
         width, height = A4
         cvs = canvas.Canvas(f'.\\test_output\\{filename}.pdf', pagesize=A4)
         cvs.drawImage(self.carrier['summary_img'], 0,0, width=width, height=height)
@@ -253,7 +254,6 @@ class Summary():
     def update_claimstatus(self, status):
         assert status in ('S', 'R', 'W', 'H') # sent, recieved, waiting, hold
         print(config.UPDATE_CLAIMSTATUS.format(status, self.claimnums))
-        # self.db.query(config.UPDATE_CLAIMSTATUS.format(status, self.claimnums))
 
     def insert_to_sentclaim(self):
         # ??????
@@ -262,21 +262,23 @@ class Summary():
         print(query_string)
 
     def remove_from_sentclaim(self):
-        pass
+        print(config.DELETE_SENTCLAIM.format(self.claimnums))
 
-    def send(self):
-        print(config.UPDATE_CLAIMSTATUS.format('S', self.claimnums) + ';\n' +\
-            config.UPDATE_DATESENT.format(date.today(), self.claimnums))
-        # self.db.query(config.UPDATE_DATESENT.format(date.today(), self.claimnums))
+    def send(self, forms=True, summary=True, spreadsheet=True):
+        self.update_claimstatus('S')
+        print(config.UPDATE_DATESENT.format(date.today(), self.claimnums))
         self.insert_to_sentclaim()
-        self.to_forms(f'{self.name}_forms')
-        self.to_summary_form(self.name)
-        self.to_spreadsheet(f'{self.name}_spreadsheet')
+        if forms:
+            self.to_forms(f'{self.name}_forms')
+        if summary:
+            self.to_summary(f'{self.name}_summary')
+        if spreadsheet:
+            self.to_spreadsheet(f'{self.name}_spreadsheet')
 
-    def receive(self, db):
+    def receive(self):
         self.update_claimstatus('R')
         print(config.UPDATE_SENTCLAIM.format(self.claimnums))
-        print(config.INSERT_CLAIMPAYMENT.format(
+        print(config.INSERT_CLAIMPAYMENT.format( # needs testing
             carrier = self.carrier['name'],
             date    = date.today(),
             amount  = self.total,
@@ -331,6 +333,4 @@ def get_decile(pat_school):
 
 if __name__ == '__main__':
     with Database() as db:
-        test = Summary.from_sentclaim(db, config.SDSC, 'SDSC300320')
-        print(test)
-        test.to_forms()
+        test = Summary.from_waiting(db, config.SDSC)
