@@ -422,3 +422,9 @@ UPDATE sentclaim
 SET status = 1
 WHERE claimnum in ({})
 '''
+
+DELETE_CLAIMPROC = '''
+DELETE FROM claimproc cp
+WHERE procnum = {procnum}
+AND claimnum = {claimnum}
+'''

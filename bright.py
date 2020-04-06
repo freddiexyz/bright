@@ -27,25 +27,26 @@ class Claim():
         self.patient = patient
         self.procedures = procedures
         self.carrier = carrier
+
         self.patient['patient name'] = self.patient['first_name'] + ' ' + self.patient['last_name']
         self.patient['birthdate'] = self.patient['birthdate'].strftime("%d%m%Y")
         self.patient['prov_city'] = 'Christchurch'
+
         self.missing_info = []
         self.is_pa = bool(self.patient['claimform'] == self.carrier['pa_claimform'])
-        if self.carrier['name'] == 'OHSA':
+
+        if self.carrier is config.OHSA:
             #TODO: deal with capitated procedures
             self.patient['decile'] = get_decile(self.patient['school'])
 
-        fee = 0
         for proc in self.procedures:
-            fee += proc['fee']
-            proc['fee'] = f"{proc['fee']:.2f}" # 2 decimal place float since currency
             proc['date'] = proc['proc_date'].strftime("%d.%m.%y")
             if proc['teeth']:
                 proc['teeth'] = ','.join(config.teeth[tooth] for tooth in proc['teeth'].split(',')\
                  if tooth.isalnum()) # conversion to not american notation
 
-        self.patient['fee'] = fee # sum of procedures
+        self.patient['fee'] = self.calculate_fee() # sum of procedures
+        self.summary = None
 
     def __len__(self):
         return len(self.procedures)
@@ -82,6 +83,13 @@ class Claim():
         procedures = db.query(config.SELECT_PROCEDURES_SENT.format(name)).all(as_dict=True)
 
         return cls.merge(patients, procedures, carrier)
+
+    def calculate_fee(self):
+        fee = 0
+        for proc in self.procedures:
+            fee += float(proc['fee'])
+            proc['fee'] = f"{proc['fee']:.2f}" # 2 decimal place float since currency
+        return fee
 
     def validate(self):
         # prior approval claims need prior approval numbers
@@ -134,19 +142,36 @@ class Claim():
         draw(cvs, self.patient['fee'], *self.carrier['form_coords']['total'])
         cvs.showPage()
 
-    def update_claimstatus(self, db, status):
+    def update_claimstatus(self, status):
         assert status in ('S', 'R', 'W', 'H') # sent, recieved, waiting, hold
         print(config.UPDATE_CLAIMSTATUS.format(status, self.patient['claimnum']))
-        # db.query(config.UPDATE_CLAIMSTATUS.format(status, claimnums))
+        # self.summary.db.query(config.UPDATE_CLAIMSTATUS.format(status, claimnums))
+
+    def remove_from_sentclaim(self):
+        print(config.DELETE_SENTCLAIM.format(self.patient['claimnum']))
+        # self.summary.db.query(config.DELETE_SENTCLAIM.format(self.patient['claimnum']))
+
+    def remove_procedure(self, procedure):
+        assert procedure in self.procedures
+        if len(self) == 1:
+            self.summary.remove_claim(self)
+            return
+        self.summary.db.query(config.DELETE_CLAIMPROC.format(procnum=procedure['procnum'],
+            claimnum=self.patient['claimnum']))
+        self.procedures.remove(procedure)
+
+        self.calculate_fee()
 
         
 class Summary():
     def __init__(self, claims, carrier, name=None):
-        self.claims = tuple(claims)
+        self.claims = list(claims)
         self.carrier = carrier
-        self.total = sum(claim.patient['fee'] for claim in self.claims)
-        self.GST = self.total * config.GST
-        self.total_inc_GST = self.total + self.GST
+
+        self.calculate_totals()
+
+        for claim in self.claims:
+            claim.summary = self
 
         self.claimnums = ','.join(str(claim.patient['claimnum']) for claim in self.claims)
 
@@ -185,6 +210,11 @@ class Summary():
         cls.db = db
         claims = list(Claim.from_claimnum(db, carrier, name))
         return cls(claims, carrier, name)
+
+    def calculate_totals(self):
+        self.total = sum(claim.patient['fee'] for claim in self.claims)
+        self.GST = self.total * config.GST
+        self.total_inc_GST = self.total + self.GST
 
     def to_forms(self, filename=None):
         if filename is None:
@@ -285,6 +315,16 @@ class Summary():
             claims  = self.claimnums,
             note    = self.name))
 
+    def remove_claim(self, claim):
+        claim.update_claimstatus('W')
+        claim.remove_from_sentclaim()
+        claim.summary = None
+
+        self.claims.remove(claim)
+        self.claimnums = ','.join(str(claim.patient['claimnum']) for claim in self.claims)
+        self.calculate_totals()
+
+
 def draw(cvs, value, *coords):
     # wrapper for reportlabs.canvas.Canvas.drawString
     if type(value) is float:
@@ -334,3 +374,4 @@ def get_decile(pat_school):
 if __name__ == '__main__':
     with Database() as db:
         test = Summary.from_waiting(db, config.SDSC)
+        print(test.claims[0].procedures[0])
