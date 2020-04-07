@@ -6,7 +6,7 @@ from openpyxl import Workbook
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
-from datetime import date, time
+from datetime import date, datetime
 
 import _secret
 import logging
@@ -216,9 +216,7 @@ class Summary():
         self.GST = self.total * config.GST
         self.total_inc_GST = self.total + self.GST
 
-    def to_forms(self, filename=None):
-        if filename is None:
-            filename = self.name
+    def to_forms(self, filename):
         cvs = canvas.Canvas(f'.\\test_output\\{filename}.pdf', pagesize=A4)
         for claim in self.claims:
             claim.to_form(cvs)
@@ -298,6 +296,8 @@ class Summary():
         self.update_claimstatus('S')
         print(config.UPDATE_DATESENT.format(date.today(), self.claimnums))
         self.insert_to_sentclaim()
+        self.insert_task()
+        self.insert_tasknote('sent')
         if forms:
             self.to_forms(f'{self.name}_forms')
         if summary:
@@ -307,6 +307,7 @@ class Summary():
 
     def receive(self):
         self.update_claimstatus('R')
+        self.update_task()
         print(config.UPDATE_SENTCLAIM.format(self.claimnums))
         print(config.INSERT_CLAIMPAYMENT.format( # needs testing
             carrier = self.carrier['name'],
@@ -324,6 +325,25 @@ class Summary():
         self.claimnums = ','.join(str(claim.patient['claimnum']) for claim in self.claims)
         self.calculate_totals()
 
+    def insert_task(self):
+        assert self.get_tasknum() is None
+        self.db.query(config.INSERT_TASK.format(descript=self.name, datetime=datetime.now()))
+
+    def get_tasknum(self):
+        res = self.db.query(config.SELECT_TASKNUM.format(descript=self.name)).one(as_dict=True)
+        if res:
+            return res['TaskNum']
+        else:
+            return None
+
+    def insert_tasknote(self, note):
+        self.db.query(config.INSERT_TASKNOTE.format(tasknum=self.get_tasknum(), datetime=datetime.now(), note=note))
+
+    def update_task(self):
+        self.db.query(config.UPDATE_TASK.format(tasknum=self.get_tasknum()))
+
+    def remove_task(self):
+        self.db.query(config.DELETE_TASK.format(tasknum=self.get_tasknum()))
 
 def draw(cvs, value, *coords):
     # wrapper for reportlabs.canvas.Canvas.drawString
@@ -374,4 +394,7 @@ def get_decile(pat_school):
 if __name__ == '__main__':
     with Database() as db:
         test = Summary.from_waiting(db, config.SDSC)
-        print(test.claims[0].procedures[0])
+        test.insert_task()
+        test.insert_tasknote('sent')
+        test.remove_task()
+        print(test.get_tasknum())

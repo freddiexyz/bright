@@ -428,3 +428,72 @@ DELETE FROM claimproc cp
 WHERE procnum = {procnum}
 AND claimnum = {claimnum}
 '''
+
+INSERT_TASK = '''
+INSERT INTO task
+(
+    TaskListNum,
+    Descript,
+    TaskStatus,
+    IsRepeating,
+    DateType,
+    FromNum,
+    ObjectType,
+    DateTimeEntry,
+    UserNum,
+    PriorityDefNum,
+    ReminderType,
+    ReminderFrequency
+    )
+VALUES
+    (
+    191,
+    '{descript}',
+    0,
+    0,
+    0,
+    0,
+    0,
+    '{datetime}',
+    11,
+    340,
+    0,
+    0)
+'''
+
+INSERT_TASKNOTE = '''
+INSERT INTO tasknote
+(
+    TaskNum,
+    UserNum,
+    DateTimeNote,
+    Note
+    )
+VALUES
+(
+    {tasknum},
+    11,
+    '{datetime}',
+    '{note}'
+    )
+'''
+
+UPDATE_TASK = '''
+UPDATE task
+SET TaskStatus = 2
+WHERE TaskNum = {tasknum}
+'''
+
+SELECT_TASKNUM = '''
+SELECT TaskNum
+FROM task
+WHERE TaskListNum = 191
+AND descript = '{descript}'
+'''
+
+DELETE_TASK = '''
+DELETE FROM task
+WHERE TaskNum = {tasknum};
+DELETE FROM tasknote
+WHERE TaskNum = {tasknum}
+'''
