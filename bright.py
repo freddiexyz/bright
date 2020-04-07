@@ -190,7 +190,7 @@ class Summary():
             f'\nTotal inc GST: {self.total_inc_GST:>8.2f}'
 
     @classmethod
-    def from_waiting(cls, db, carrier):
+    def from_waiting(cls, db, carrier, name=None):
         cls.db = db
         claims = []
         gen = Claim.from_waiting(db, carrier)
@@ -203,7 +203,7 @@ class Summary():
                     pass # TODO: deal with claims needing info
         except StopIteration:
             pass
-        return cls(claims, carrier)
+        return cls(claims, carrier, name)
 
     @classmethod
     def from_sentclaim(cls, db, carrier, name):
@@ -325,6 +325,10 @@ class Summary():
         self.claimnums = ','.join(str(claim.patient['claimnum']) for claim in self.claims)
         self.calculate_totals()
 
+    def remove_procedure(self, claim, procedure):
+        claim.remove_procedure(procedure)
+        self.calculate_totals()
+
     def insert_task(self):
         assert self.get_tasknum() is None
         self.db.query(config.INSERT_TASK.format(descript=self.name, datetime=datetime.now()))
@@ -344,6 +348,7 @@ class Summary():
 
     def remove_task(self):
         self.db.query(config.DELETE_TASK.format(tasknum=self.get_tasknum()))
+
 
 def draw(cvs, value, *coords):
     # wrapper for reportlabs.canvas.Canvas.drawString
@@ -394,7 +399,3 @@ def get_decile(pat_school):
 if __name__ == '__main__':
     with Database() as db:
         test = Summary.from_waiting(db, config.SDSC)
-        test.insert_task()
-        test.insert_tasknote('sent')
-        test.remove_task()
-        print(test.get_tasknum())
