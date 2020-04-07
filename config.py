@@ -337,7 +337,7 @@ SELECT cw.* # see claims waiting view for fields
 FROM _claims_waiting cw
 INNER JOIN claim c ON cw.claimnum = c.claimnum
 WHERE c.plannum = {plannum}
-AND c.claimform in ({claimform}, {pa_claimform})
+AND c.claimform in ({claimform})
 ORDER BY claimnum;
 '''
 
@@ -347,7 +347,7 @@ FROM _get_procedures gp
 INNER JOIN claimproc cp on gp.procnum = cp.procnum
 INNER JOIN claim c on cp.claimnum = c.claimnum
 WHERE c.plannum = {plannum}
-AND c.claimform in ({claimform}, {pa_claimform})
+AND c.claimform in ({claimform})
 ORDER BY c.claimnum;
 '''
 

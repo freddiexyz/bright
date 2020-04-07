@@ -53,7 +53,7 @@ class Claim():
 
     def __str__(self):
         return f"{self.patient['last_name']}, {self.patient['first_name']}\n\t" +\
-            "\n\t".join("{proc_date} | {code} | {quantity} | {fee:>6.2f} | {teeth}".format(
+            "\n\t".join("{proc_date} | {code} | {quantity} | {fee} | {teeth}".format(
                 **proc) for proc in self.procedures)
 
     @classmethod
@@ -88,7 +88,7 @@ class Claim():
         fee = 0
         for proc in self.procedures:
             fee += float(proc['fee'])
-            proc['fee'] = f"{proc['fee']:.2f}" # 2 decimal place float since currency
+            proc['fee'] = f"{proc['fee']:6.2f}" # 2 decimal place float since currency
         return fee
 
     def validate(self):
@@ -283,6 +283,9 @@ class Summary():
         assert status in ('S', 'R', 'W', 'H') # sent, recieved, waiting, hold
         print(config.UPDATE_CLAIMSTATUS.format(status, self.claimnums))
 
+    def update_datesent(self):
+        print(config.UPDATE_DATESENT.format(date.today(), self.claimnums))
+
     def insert_to_sentclaim(self):
         # ??????
         claimnums = ',\n'.join(f"({claim.patient['claimnum']}, {self.name}, {self.carrier['name']})" for claim in self.claims)
@@ -294,10 +297,12 @@ class Summary():
 
     def send(self, forms=True, summary=True, spreadsheet=True):
         self.update_claimstatus('S')
-        print(config.UPDATE_DATESENT.format(date.today(), self.claimnums))
         self.insert_to_sentclaim()
+        self.update_datesent()
+
         self.insert_task()
-        self.insert_tasknote('sent')
+        self.insert_tasknote(f'Sent\n{self}')
+
         if forms:
             self.to_forms(f'{self.name}_forms')
         if summary:
@@ -307,6 +312,7 @@ class Summary():
 
     def receive(self):
         self.update_claimstatus('R')
+        self.insert_tasknote(f'Received\n{self}')
         self.update_task()
         print(config.UPDATE_SENTCLAIM.format(self.claimnums))
         print(config.INSERT_CLAIMPAYMENT.format( # needs testing
@@ -399,3 +405,5 @@ def get_decile(pat_school):
 if __name__ == '__main__':
     with Database() as db:
         test = Summary.from_waiting(db, config.SDSC)
+        print(test, '\n')
+        print(*test.claims, sep='\n')
