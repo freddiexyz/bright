@@ -216,16 +216,18 @@ class Summary():
         self.GST = self.total * config.GST
         self.total_inc_GST = self.total + self.GST
 
-    def to_forms(self, filename):
-        cvs = canvas.Canvas(f'.\\test_output\\{filename}.pdf', pagesize=A4)
+    def to_forms(self, cvs, summary=True):
+        # cvs = canvas.Canvas(f'.\\test_output\\{filename}.pdf', pagesize=A4)
+        if summary:
+            self.to_summary(cvs)
         for claim in self.claims:
             claim.to_form(cvs)
-        cvs.save()
+        # cvs.save()
         return cvs
 
-    def to_summary(self, filename):
+    def to_summary(self, cvs):
         width, height = A4
-        cvs = canvas.Canvas(f'.\\test_output\\{filename}.pdf', pagesize=A4)
+        # cvs = canvas.Canvas(f'.\\test_output\\{filename}.pdf', pagesize=A4)
         cvs.drawImage(self.carrier['summary_img'], 0,0, width=width, height=height)
         cvs.setFont('Courier', 12)
 
@@ -238,7 +240,8 @@ class Summary():
         draw(cvs, self.total,         *config.summary_coords['fee_ex'])
         draw(cvs, self.GST,           *config.summary_coords['GST'])
 
-        cvs.save()
+        cvs.showPage()
+        # cvs.save()
         return cvs
 
     def to_spreadsheet(self, filename):
