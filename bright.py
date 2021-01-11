@@ -9,16 +9,17 @@ from reportlab.pdfgen import canvas
 from datetime import date, datetime
 
 import _secret
+import config
+
 import logging
 import records
-import config
 import re
 
 
 class Database(records.Database):
 
     def __init__(self):
-        super().__init__('mysql://{userpass}@{host}/{database}'.format(**_secret.db_login))
+        super().__init__('mysql+pymysql://{userpass}@{host}/{database}'.format(**_secret.db_login))
 
 
 class Claim():
@@ -217,7 +218,6 @@ class Summary():
         self.total_inc_GST = self.total + self.GST
 
     def to_forms(self, cvs, summary=True):
-        # cvs = canvas.Canvas(f'.\\test_output\\{filename}.pdf', pagesize=A4)
         if summary:
             self.to_summary(cvs)
         for claim in self.claims:
@@ -227,14 +227,13 @@ class Summary():
 
     def to_summary(self, cvs):
         width, height = A4
-        # cvs = canvas.Canvas(f'.\\test_output\\{filename}.pdf', pagesize=A4)
         cvs.drawImage(self.carrier['summary_img'], 0,0, width=width, height=height)
         cvs.setFont('Courier', 12)
 
-        for field, value in _secret.practice_details.items():
-            draw(cvs, value, *config.summary_coords[field])
+        # for field, value in _secret.practice_details.items():
+        #     draw(cvs, value, *config.summary_coords[field])
 
-        draw(cvs, filename,           *config.summary_coords['claim_reference'])
+        draw(cvs, 'filename',         *config.summary_coords['claim_reference'])
         draw(cvs, len(self),          *config.summary_coords['num_patients'])
         draw(cvs, self.total_inc_GST, *config.summary_coords['fee_inc'])
         draw(cvs, self.total,         *config.summary_coords['fee_ex'])
@@ -410,3 +409,6 @@ if __name__ == '__main__':
         test = Summary.from_waiting(db, config.SDSC)
         print(test, '\n')
         print(*test.claims, sep='\n')
+        cvs = canvas.Canvas(f'.\\test_output\\abc1234.pdf', pagesize=A4)
+        test.to_forms(cvs)
+        cvs.save()
