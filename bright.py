@@ -13,6 +13,7 @@ import config
 
 import logging
 import records
+import pysftp
 import re
 
 
@@ -92,7 +93,10 @@ class Claim():
             proc['fee'] = f"{proc['fee']:6.2f}" # 2 decimal place float since currency
         return fee
 
-    def validate(self):
+    def validate_old(self):
+        '''
+        Replace with new function that is less of a mess
+        '''
         # prior approval claims need prior approval numbers
         if self.is_pa and not self.patient['prior_approval']:
             self.missing_info.append('prior_approval')
@@ -111,6 +115,35 @@ class Claim():
             self.missing_info.append('decile')
             # TODO: match decile to DBCON code/fee to ensure correct decile band being claimed
         return not self.missing_info
+
+    def validate(self):
+        self.validate_nhi()
+        if self.carrier['name'] == 'SDSC':
+            self.validate_cds_ref()
+        elif self.carrier['name'] == 'OHSA':
+            pass
+        if self.is_pa:
+            self.validate_pa()
+        return not self.missing_info
+
+    def validate_nhi(self):
+        if not check_nhi(self.patient['NHI']):
+            self.missing_info.append('NHI')
+            return False
+        return True
+
+    def validate_cds_ref(self):
+        if not check_cds_ref(self.patient['subnum']):
+            self.missing_info.append('subnum')
+            return False
+        return True
+        
+
+    def validate_pa(self):
+        if not re.fullmatch('^CTY', self.patient['prior_approval']):
+            self.missing_info.append('prior_approval')
+            return False
+        return True
 
     def to_form(self, cvs):
         form_length = self.carrier['form_length_pa'] if self.is_pa else self.carrier['form_length']
@@ -230,8 +263,8 @@ class Summary():
         cvs.drawImage(self.carrier['summary_img'], 0,0, width=width, height=height)
         cvs.setFont('Courier', 12)
 
-        # for field, value in _secret.practice_details.items():
-        #     draw(cvs, value, *config.summary_coords[field])
+        for field, value in _secret.practice_details.items():
+            draw(cvs, value, *config.summary_coords[field])
 
         draw(cvs, 'filename',         *config.summary_coords['claim_reference'])
         draw(cvs, len(self),          *config.summary_coords['num_patients'])

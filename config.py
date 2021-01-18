@@ -2,6 +2,8 @@ MAX_CLAIMS = 10
 
 GST = 0.15
 
+FILENAME_FORMAT = '{payee_num}-{claim_ref}-{claim_type}-{num_patients}'
+
 # for reportlabs default A4 page
 left_margin_1 = 36
 left_margin_2 = 310
@@ -480,7 +482,7 @@ VALUES
 
 UPDATE_TASK = '''
 UPDATE task
-SET TaskStatus = 2
+SET TaskStatus = 2 # done
 WHERE TaskNum = {tasknum}
 '''
 
