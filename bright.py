@@ -34,8 +34,9 @@ class Claim():
         self.patient['birthdate'] = self.patient['birthdate'].strftime("%d%m%Y")
         self.patient['prov_city'] = 'Christchurch'
 
-        self.missing_info = []
         self.is_pa = bool(self.patient['claimform'] == self.carrier['pa_claimform'])
+        if not self.is_pa:
+            del self.patient['prior_approval']
 
         if self.carrier is config.OHSA:
             #TODO: deal with capitated procedures
@@ -93,58 +94,44 @@ class Claim():
             proc['fee'] = f"{proc['fee']:6.2f}" # 2 decimal place float since currency
         return fee
 
-    def validate_old(self):
-        '''
-        Replace with new function that is less of a mess
-        '''
-        # prior approval claims need prior approval numbers
-        if self.is_pa and not self.patient['prior_approval']:
-            self.missing_info.append('prior_approval')
-        # all claims need valid NHIs
-        if not check_nhi(self.patient['NHI']):
-            self.missing_info.append('NHI')
-        # SDSC claims need referral numbers
-        if self.carrier['name'] == 'SDSC' and not check_cds_ref(self.patient['subnum']):
-            self.missing_info.append('subnum')
-        # check for presence of required fields
-        for field in ('first_name', 'last_name', 'birthdate', 'address', 'city', 'school'):
-            if not self.patient[field]:
-                self.missing_info.append(field)
-        # OHSA claims need deciles
-        if self.carrier['name'] == 'OHSA' and not self.patient['decile']:
-            self.missing_info.append('decile')
-            # TODO: match decile to DBCON code/fee to ensure correct decile band being claimed
-        return not self.missing_info
-
     def validate(self):
-        self.validate_nhi()
-        if self.carrier['name'] == 'SDSC':
-            self.validate_cds_ref()
+        missing_info = []
+        if not self.validate_nhi():
+            missing_info.append('NHI')
+        if self.carrier['name'] == 'SDSC' and not self.validate_cds_ref():
+            missing_info.append('subnum')
         elif self.carrier['name'] == 'OHSA':
-            pass
-        if self.is_pa:
-            self.validate_pa()
-        return not self.missing_info
+            pass #TODO: more ohsa stuff
+        if self.is_pa and not self.validate_pa():
+            missing_info.append('prior_approval')
+        missing_info.extend(field for field in self.patient if not self.patient[field])
+        if missing_info:
+            self.missing_info = missing_info
+        print(missing_info)
+        return not missing_info
 
     def validate_nhi(self):
         if not check_nhi(self.patient['NHI']):
-            self.missing_info.append('NHI')
             return False
         return True
 
     def validate_cds_ref(self):
         if not check_cds_ref(self.patient['subnum']):
-            self.missing_info.append('subnum')
             return False
         return True
         
 
     def validate_pa(self):
-        if not re.fullmatch('^CTY', self.patient['prior_approval']):
-            self.missing_info.append('prior_approval')
+        # could pattern match PA numbers in future
+        if not self.patient['prior_approval']:
             return False
         return True
 
+    def validate_info(self, field):
+        if not self.patient[field]:
+            return False
+        return True
+            
     def to_form(self, cvs):
         form_length = self.carrier['form_length_pa'] if self.is_pa else self.carrier['form_length']
         for page_num in range(((len(self) - 1) // form_length) + 1):
@@ -152,7 +139,7 @@ class Claim():
             self.to_page(cvs, procs)
 
     def to_page(self, cvs, procs):
-        # TODO: tickboxes
+        # TODO: gender tickboxes
         width, height = A4
         cvs.drawImage(self.carrier['form_img'], 0,0, width=width, height=height) # fullpage image
         pat_coords = self.carrier['form_coords']['patient']
@@ -439,9 +426,11 @@ def get_decile(pat_school):
 
 if __name__ == '__main__':
     with Database() as db:
-        test = Summary.from_waiting(db, config.SDSC)
+        test = Summary.from_waiting(db, config.SDSC, name='TEST-CLAIM')
         print(test, '\n')
         print(*test.claims, sep='\n')
-        cvs = canvas.Canvas(f'.\\test_output\\abc1234.pdf', pagesize=A4)
-        test.to_forms(cvs)
-        cvs.save()
+        # cvs = canvas.Canvas(f'.\\test_output\\abc1234.pdf', pagesize=A4)
+        # test.to_forms(cvs)
+        # cvs.save()
+        # test.insert_task()
+        # test.insert_tasknote(f'Sent\n{test}')
