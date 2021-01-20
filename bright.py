@@ -107,7 +107,6 @@ class Claim():
         missing_info.extend(field for field in self.patient if not self.patient[field])
         if missing_info:
             self.missing_info = missing_info
-        print(missing_info)
         return not missing_info
 
     def validate_nhi(self):
@@ -120,18 +119,12 @@ class Claim():
             return False
         return True
         
-
     def validate_pa(self):
         # could pattern match PA numbers in future
         if not self.patient['prior_approval']:
             return False
         return True
 
-    def validate_info(self, field):
-        if not self.patient[field]:
-            return False
-        return True
-            
     def to_form(self, cvs):
         form_length = self.carrier['form_length_pa'] if self.is_pa else self.carrier['form_length']
         for page_num in range(((len(self) - 1) // form_length) + 1):
@@ -432,5 +425,5 @@ if __name__ == '__main__':
         # cvs = canvas.Canvas(f'.\\test_output\\abc1234.pdf', pagesize=A4)
         # test.to_forms(cvs)
         # cvs.save()
-        # test.insert_task()
-        # test.insert_tasknote(f'Sent\n{test}')
+        test.insert_task()
+        test.insert_tasknote(f'Sent\n{test}')
