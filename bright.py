@@ -81,6 +81,15 @@ class Claim():
         return cls.merge(patients, procedures, carrier)
 
     @classmethod
+    def from_waiting_pa(cls, db, carrier):
+        plannum = carrier['plannum']
+        claimform = carrier['pa_claimform']
+        patients = db.query(config.SELECT_PATIENTS_WAITING.format(plannum=planum, claimform=claimform)).all(as_dict=True)
+        procedures = db.query(config.SELECT_PROCEDURES_WAITING.format(plannum=planum, claimform=claimform)).all(as_dict=True)
+
+        return cls.merge(patients, procedures, carrier)
+
+    @classmethod
     def from_claimnum(cls, db, carrier, name):
         patients = db.query(config.SELECT_PATIENTS_SENT.format(name)).all(as_dict=True)
         procedures = db.query(config.SELECT_PROCEDURES_SENT.format(name)).all(as_dict=True)
@@ -419,11 +428,11 @@ def get_decile(pat_school):
 
 if __name__ == '__main__':
     with Database() as db:
-        test = Summary.from_waiting(db, config.SDSC, name='TEST-CLAIM')
-        print(test, '\n')
-        print(*test.claims, sep='\n')
-        # cvs = canvas.Canvas(f'.\\test_output\\abc1234.pdf', pagesize=A4)
-        # test.to_forms(cvs)
-        # cvs.save()
-        test.insert_task()
-        test.insert_tasknote(f'Sent\n{test}')
+        test = Summary.from_waiting_pa(db, config.SDSC, name='TEST-CLAIM')
+        # print(test, '\n')
+        # print(*test.claims, sep='\n')
+        cvs = canvas.Canvas(f'.\\test_output\\abc1234.pdf', pagesize=A4)
+        test.to_forms(cvs)
+        cvs.save()
+        # test.insert_task()
+        # test.insert_tasknote(f'Sent\n{test}')
