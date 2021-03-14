@@ -244,7 +244,6 @@ class Summary():
             self.to_summary(cvs)
         for claim in self.claims:
             claim.to_form(cvs)
-        # cvs.save()
         return cvs
 
     def to_summary(self, cvs):
@@ -262,7 +261,6 @@ class Summary():
         draw(cvs, self.GST,           *config.summary_coords['GST'])
 
         cvs.showPage()
-        # cvs.save()
         return cvs
 
     def to_spreadsheet(self, filename):
