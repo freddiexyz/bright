@@ -201,7 +201,11 @@ class Summary():
         if name is None:
             self.name = date.today().strftime(f'{self.carrier["name"]}%d%m%y')
         else:
-            self.name = name
+            self.name = config.FILENAME_FORMAT.format(
+                payee_num    = _secret.practice_details['payee_number'],
+                claim_ref    = name,
+                claim_type   = self.carrier['name'],
+                num_patients = len(self))
 
     def __len__(self):
         return len(self.claims)
@@ -426,11 +430,4 @@ def get_decile(pat_school):
 
 if __name__ == '__main__':
     with Database() as db:
-        test = Summary.from_waiting_pa(db, config.SDSC, name='TEST-CLAIM')
-        # print(test, '\n')
-        # print(*test.claims, sep='\n')
-        cvs = canvas.Canvas(f'.\\test_output\\abc1234.pdf', pagesize=A4)
-        test.to_forms(cvs)
-        cvs.save()
-        # test.insert_task()
-        # test.insert_tasknote(f'Sent\n{test}')
+        print('Connected to database...')
