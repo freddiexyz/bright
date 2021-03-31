@@ -39,8 +39,12 @@ class Claim():
             del self.patient['prior_approval']
 
         if self.carrier is config.OHSA:
-            #TODO: deal with capitated procedures
             self.patient['decile'] = get_decile(self.patient['school'])
+        elif self.carrier is config.SDSC:
+            if self.patient['subnum'] == '.':
+                self.tx_tickbox_num = 3
+            else:
+                self.tx_tickbox_num = 1
 
         for proc in self.procedures:
             proc['date'] = proc['proc_date'].strftime("%d.%m.%y")
@@ -141,28 +145,45 @@ class Claim():
             self.to_page(cvs, procs)
 
     def to_page(self, cvs, procs):
-        # TODO: gender tickboxes
         width, height = A4
-        cvs.drawImage(self.carrier['form_img'], 0,0, width=width, height=height) # fullpage image
-        pat_coords = self.carrier['form_coords']['patient']
-        if self.is_pa:
-            proc_coords = self.carrier['form_coords']['procedures_pa']
-            draw(cvs, self.patient['prior_approval'],
-                *self.carrier['form_coords']['prior_approval'])
-        else:
-            proc_coords = self.carrier['form_coords']['procedures']
+        form_coords = self.carrier['form_coords']
 
+        # Form image and patient info
         cvs.setFont('Courier', 12) # courier since monospaced
+        cvs.drawImage(self.carrier['form_img'], 0,0, width=width, height=height) # fullpage image
+
+        pat_coords = form_coords['patient']
+        if self.is_pa:
+            proc_coords = form_coords['procedures_pa']
+            draw(cvs, self.patient['prior_approval'],
+                *form_coords['prior_approval'])
+        else:
+            proc_coords = form_coords['procedures']
+
         for field, coords in pat_coords.items():
             draw(cvs, self.patient[field], *coords)
 
+        #tickboxes
+        cvs.setFont('Helvetica-Bold', 23)
+
+        if self.patient['gender'] == 1: # female
+            gender_tickbox_coords = form_coords['tickboxes']['gender_f']
+        elif self.patient['gender'] == 2: # male
+            gender_tickbox_coords = form_coords['tickboxes']['gender_m']
+
+        draw(cvs, 'x', *gender_tickbox_coords)
+
+        tx_tickbox_coords = form_coords['tickboxes'][f'tx{self.tx_tickbox_num}']
+        draw(cvs, 'x', *tx_tickbox_coords)
+
+        # procedures + fee total
         cvs.setFont('Courier', 10) # so it will fit
         for num, proc in enumerate(procs):
             for field, coords in proc_coords.items():
                 # lowers height of each line by set amount each procedure
                 draw(cvs, str(proc[field]), coords[0], coords[1]-(num*config.proc_line_step))
 
-        draw(cvs, self.patient['fee'], *self.carrier['form_coords']['total'])
+        draw(cvs, self.patient['fee'], *form_coords['total'])
         cvs.showPage()
 
     def update_claimstatus(self, status):
@@ -201,11 +222,7 @@ class Summary():
         if name is None:
             self.name = date.today().strftime(f'{self.carrier["name"]}%d%m%y')
         else:
-            self.name = config.FILENAME_FORMAT.format(
-                payee_num    = _secret.practice_details['payee_number'],
-                claim_ref    = name,
-                claim_type   = self.carrier['name'],
-                num_patients = len(self))
+            self.name = name
 
     def __len__(self):
         return len(self.claims)
@@ -258,7 +275,7 @@ class Summary():
         for field, value in _secret.practice_details.items():
             draw(cvs, value, *config.summary_coords[field])
 
-        draw(cvs, 'filename',         *config.summary_coords['claim_reference'])
+        draw(cvs, self.name,          *config.summary_coords['claim_reference'])
         draw(cvs, len(self),          *config.summary_coords['num_patients'])
         draw(cvs, self.total_inc_GST, *config.summary_coords['fee_inc'])
         draw(cvs, self.total,         *config.summary_coords['fee_ex'])
@@ -429,5 +446,17 @@ def get_decile(pat_school):
 
 
 if __name__ == '__main__':
+    name = 'BSTEST'
     with Database() as db:
-        print('Connected to database...')
+        test_summary = Summary.from_waiting(db, config.SDSC, name)
+
+    filename = config.FILENAME_FORMAT.format(
+                    payee_num    = _secret.practice_details['payee_number'],
+                    claim_ref    = name,
+                    claim_type   = test_summary.carrier['name'],
+                    num_patients = len(test_summary)
+                    )
+
+    cvs = canvas.Canvas(f'.\\test_output\\{filename}.pdf', pagesize=A4)
+    test_summary.to_forms(cvs, summary=False)
+    cvs.save()

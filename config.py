@@ -1,4 +1,4 @@
-MAX_CLAIMS = 10
+MAX_CLAIMS = 2
 
 GST = 0.15
 
@@ -18,6 +18,10 @@ proc_quantity_width = 320
 proc_teeth_width = 360
 proc_fee_width = 445
 
+gender_tick_height = 639
+
+tx_tick_margin = 27
+
 SDSC_form_coords = {
     'patient' : {
         'NHI'        : (left_margin_1, 717, {'charSpace' : 11}),
@@ -27,8 +31,17 @@ SDSC_form_coords = {
         'last_name'  : (left_margin_2, 717),
         'first_name' : (left_margin_2, 678),
         'address'    : (left_margin_2, 630),
-        # 'provider' : (),
-        'prov_city'  : (left_margin_2, 550)
+        'prov_city'  : (left_margin_2, 550),
+        'subnum'     : (445, 298)
+    },
+    'tickboxes' : {
+        'gender_m' : (70, gender_tick_height),
+        'gender_f' : (142, gender_tick_height),
+        'tx1'      : (tx_tick_margin, 473),
+        'tx2'      : (tx_tick_margin, 456),
+        'tx3'      : (tx_tick_margin, 425),
+        'tx4'      : (tx_tick_margin, 397),
+        'tx5'      : (tx_tick_margin, 366)
     },
     'procedures' : {
         'date'     : (proc_date_width,     proc_line_height),
