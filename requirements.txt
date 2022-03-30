@@ -10,7 +10,7 @@ mysql-connector==2.2.9
 mysqlclient==1.4.4
 odfpy==1.4.0
 openpyxl==2.4.11
-paramiko==2.7.2
+paramiko==2.10.1
 Pillow==8.1.1
 pycparser==2.20
 PyMySQL==0.9.3
